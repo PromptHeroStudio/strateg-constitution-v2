@@ -1,0 +1,73 @@
+# ========================
+# SECURITY - NEVER COMMIT
+# ========================
+.env
+.env.local
+.env.production
+.env.development
+.env.test
+secrets.json
+config.json
+credentials.json
+serviceAccountKey.json
+*.key
+*.pem
+*.priv
+id_rsa
+id_dsa
+*.enc
+
+# ========================
+# OPERATING SYSTEM
+# ========================
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+desktop.ini
+
+# ========================
+# DEVELOPMENT
+# ========================
+node_modules/
+.npm
+.pnpm
+.yarn/
+dist/
+build/
+.next/
+out/
+.cache
+.coverage
+.nyc_output
+
+# ========================
+# EDITOR/IDE
+# ========================
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.project
+.settings/
+
+# ========================
+# LOGS
+# ========================
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+lerna-debug.log*
+
+# ========================
+# TEMPORARY
+# ========================
+*.tmp
+*.temp
+tmp/
+temp/
