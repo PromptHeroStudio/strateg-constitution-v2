@@ -2435,3 +2435,1380 @@ VALIDATION CHECKLIST:
 ````
 
 ---
+---
+
+## 🔗 PATTERN #5: INTEGRATION PATTERN
+
+### When to Use
+
+**Connecting two systems, features, or services** - making different parts work together.
+
+**Examples:**
+- "Integrate Stripe payments with user dashboard"
+- "Connect email service (Resend) to notification system"
+- "Integrate third-party API (Google Calendar) with task system"
+- "Connect frontend form to backend API"
+
+**Success Rate:** 75-85% (depends on API documentation quality)
+
+---
+
+### Pattern Template
+````markdown
+═══════════════════════════════════════════════════════════
+INTEGRATION PATTERN TEMPLATE
+═══════════════════════════════════════════════════════════
+
+PERSONA: You are a senior integration engineer with [YEARS] years of experience 
+connecting disparate systems. You've integrated hundreds of third-party APIs and 
+understand common integration pitfalls (authentication, rate limits, webhooks, 
+data format mismatches, error handling).
+
+CONTEXT:
+[Standard 5-layer context]
+
+SYSTEM A (Source):
+- Name: [What you're integrating FROM]
+- Type: [Internal feature / Third-party API]
+- Tech: [Framework, database, API type]
+- Documentation: [Link to docs]
+
+SYSTEM B (Destination):
+- Name: [What you're integrating TO]
+- Type: [Internal feature / Third-party API]
+- Tech: [Framework, database, API type]
+- Documentation: [Link to docs]
+
+INTEGRATION GOAL:
+- What data flows from A to B
+- When the integration triggers
+- Expected outcome
+
+TASK: Integrate [SYSTEM A] with [SYSTEM B] so that [GOAL].
+
+INTEGRATION REQUIREMENTS:
+
+1. DATA MAPPING:
+   - Field A1 → Field B1
+   - Field A2 → Field B2
+   - Transformation needed: [Any data transformation]
+
+2. TRIGGER:
+   - Event: [What triggers the integration]
+   - Frequency: [Real-time / Scheduled / On-demand]
+
+3. ERROR HANDLING:
+   - What if System A fails?
+   - What if System B fails?
+   - Retry strategy: [Exponential backoff / Queue]
+
+4. AUTHENTICATION:
+   - System A auth: [API key / OAuth / JWT]
+   - System B auth: [API key / OAuth / JWT]
+
+SECURITY MANDATES:
+- Commandment I: Validate data from external systems
+- Commandment VI: Verify authorization
+- Commandment VII: Encrypt API keys
+- Commandment VIII: Handle errors gracefully
+
+META-INSTRUCTIONS:
+- Start with authentication (get credentials working first)
+- Test with mock/sandbox before production
+- Implement idempotency (prevent duplicate operations)
+- Add comprehensive logging (track integration flow)
+- Consider: What if API changes? (version pinning, error detection)
+
+OUTPUT FORMAT:
+
+DELIVERABLES:
+
+1. INTEGRATION ARCHITECTURE
+   - Data flow diagram (A → Integration Layer → B)
+   - Authentication flow
+   - Error handling flow
+
+2. IMPLEMENTATION
+   - Integration service/function
+   - Data transformation logic
+   - Error handling + retry logic
+   - Webhook handlers (if applicable)
+
+3. CONFIGURATION
+   - Environment variables (API keys, endpoints)
+   - Feature flags (enable/disable integration)
+
+4. TESTS
+   - Integration tests (mock external APIs)
+   - E2E tests (use sandbox/test mode)
+
+5. MONITORING
+   - Success/failure metrics
+   - Alerting (when integration breaks)
+
+VALIDATION CHECKLIST:
+□ Authentication works (both systems)
+□ Data flows correctly (A → B)
+□ Error handling works (retry logic)
+□ Idempotency implemented (no duplicates)
+□ Tests pass (integration + E2E)
+□ Monitoring/alerting configured
+□ API keys secured (encrypted, not in code)
+═══════════════════════════════════════════════════════════
+````
+
+---
+
+### Real Example: Integrate Stripe Payments
+````markdown
+═══════════════════════════════════════════════════════════
+INTEGRATION PATTERN: STRIPE PAYMENTS
+═══════════════════════════════════════════════════════════
+
+PERSONA: You are a senior payments integration engineer with 10 years of experience 
+integrating Stripe, PayPal, and other payment processors. You've processed over 
+$100M in transactions and understand PCI compliance, webhook security, idempotency, 
+and handling payment failures gracefully.
+
+CONTEXT:
+
+PROJECT: B2B SaaS subscription platform
+TECH STACK: Next.js 14, Prisma, PostgreSQL, TailwindCSS
+CURRENT STATE: Users can sign up but no payment processing
+GOAL: Enable monthly subscriptions ($49/user/month)
+
+SYSTEM A (Source): User Dashboard (Next.js app)
+- User selects subscription plan
+- User enters payment details
+- User confirms purchase
+
+SYSTEM B (Destination): Stripe API
+- Process payment
+- Create subscription
+- Handle webhooks (payment success/failure)
+
+INTEGRATION GOAL:
+When user subscribes, create Stripe customer + subscription, then update user 
+record in database with subscription status.
+
+TASK: Integrate Stripe payment processing with user subscription system so that 
+users can subscribe to paid plans and their subscription status is tracked accurately.
+
+INTEGRATION REQUIREMENTS:
+
+1. DATA MAPPING:
+   - User email → Stripe customer email
+   - User name → Stripe customer name
+   - Subscription plan → Stripe price ID
+   - Payment method → Stripe payment method
+
+2. TRIGGER:
+   - Event: User clicks "Subscribe" button
+   - Flow: Collect payment → Create subscription → Update database
+   - Frequency: On-demand (user-initiated)
+
+3. ERROR HANDLING:
+   - Payment declined → Show error, allow retry
+   - Network timeout → Retry with exponential backoff
+   - Webhook failure → Queue for reprocessing
+   - Duplicate webhook → Idempotency check (skip if already processed)
+
+4. AUTHENTICATION:
+   - Stripe: Secret key (server-side), Publishable key (client-side)
+   - Webhook: Signature verification (prevent spoofing)
+
+SECURITY MANDATES:
+- Commandment I: Validate webhook signatures (prevent fake webhooks)
+- Commandment VII: Never log credit card numbers, use Stripe Elements
+- Commandment VIII: Handle payment failures gracefully (user-friendly errors)
+- Commandment V: Rate limit subscription attempts (prevent abuse)
+
+META-INSTRUCTIONS:
+- Use Stripe Elements (PCI compliant, don't handle card data directly)
+- Test with Stripe test mode before production
+- Implement idempotency keys (prevent duplicate charges)
+- Handle all webhook events (payment_intent.succeeded, subscription.updated, etc.)
+- Consider: What if user already has subscription? (prevent double billing)
+
+OUTPUT FORMAT:
+
+DELIVERABLES:
+
+1. INTEGRATION ARCHITECTURE
+```
+User Dashboard (Client)
+    ↓
+  [Subscribe Button Clicked]
+    ↓
+Create Payment Intent (API)
+  ↓ (returns client_secret)
+Stripe Elements (Client)
+  ↓ (user enters card)
+Confirm Payment (Stripe)
+  ↓
+Webhook: payment_intent.succeeded
+  ↓
+Create Subscription in DB
+  ↓
+Update User: subscriptionStatus = 'active'
+```
+
+**Webhook Flow:**
+```
+Stripe → POST /api/webhooks/stripe
+  ↓
+Verify signature (webhook secret)
+  ↓
+Check idempotency (already processed?)
+  ↓
+Handle event (payment_intent.succeeded, etc.)
+  ↓
+Update database
+  ↓
+Return 200 OK (acknowledge receipt)
+```
+
+2. IMPLEMENTATION
+
+**File Structure:**
+```
+/app/api/
+  /stripe/
+    create-payment-intent/route.ts
+    create-subscription/route.ts
+  /webhooks/
+    stripe/route.ts
+
+/lib/
+  stripe.ts (Stripe client)
+  stripe-webhooks.ts (Webhook handlers)
+
+/components/
+  SubscriptionForm.tsx (Stripe Elements)
+```
+
+**Code:**
+```typescript
+// lib/stripe.ts
+import Stripe from 'stripe'
+
+if (!process.env.STRIPE_SECRET_KEY) {
+  throw new Error('STRIPE_SECRET_KEY is required')
+}
+
+export const stripe = new Stripe(process.env.STRIPE_SECRET_KEY, {
+  apiVersion: '2023-10-16',
+  typescript: true
+})
+```
+```typescript
+// app/api/stripe/create-payment-intent/route.ts
+import { NextResponse } from 'next/server'
+import { getServerSession } from 'next-auth'
+import { stripe } from '@/lib/stripe'
+import { prisma } from '@/lib/prisma'
+import { z } from 'zod'
+
+const schema = z.object({
+  priceId: z.string(), // Stripe price ID (e.g., price_1234567890)
+  quantity: z.number().int().positive().default(1)
+})
+
+export async function POST(request: Request) {
+  const session = await getServerSession()
+  
+  if (!session?.user?.id) {
+    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+  }
+  
+  const body = await request.json()
+  const { priceId, quantity } = schema.parse(body)
+  
+  try {
+    // Get or create Stripe customer
+    let stripeCustomerId = session.user.stripeCustomerId
+    
+    if (!stripeCustomerId) {
+      const customer = await stripe.customers.create({
+        email: session.user.email,
+        name: session.user.name,
+        metadata: {
+          userId: session.user.id
+        }
+      })
+      
+      stripeCustomerId = customer.id
+      
+      // Save to database
+      await prisma.user.update({
+        where: { id: session.user.id },
+        data: { stripeCustomerId: customer.id }
+      })
+    }
+    
+    // Create subscription
+    const subscription = await stripe.subscriptions.create({
+      customer: stripeCustomerId,
+      items: [{ price: priceId, quantity }],
+      payment_behavior: 'default_incomplete',
+      payment_settings: { save_default_payment_method: 'on_subscription' },
+      expand: ['latest_invoice.payment_intent'],
+      metadata: {
+        userId: session.user.id
+      }
+    })
+    
+    const invoice = subscription.latest_invoice as Stripe.Invoice
+    const paymentIntent = invoice.payment_intent as Stripe.PaymentIntent
+    
+    return NextResponse.json({
+      subscriptionId: subscription.id,
+      clientSecret: paymentIntent.client_secret
+    })
+    
+  } catch (error) {
+    console.error('Stripe error:', error)
+    
+    return NextResponse.json(
+      { error: 'Failed to create subscription' },
+      { status: 500 }
+    )
+  }
+}
+```
+```typescript
+// app/api/webhooks/stripe/route.ts
+import { NextResponse } from 'next/server'
+import { headers } from 'next/headers'
+import { stripe } from '@/lib/stripe'
+import { prisma } from '@/lib/prisma'
+import Stripe from 'stripe'
+
+const webhookSecret = process.env.STRIPE_WEBHOOK_SECRET!
+
+export async function POST(request: Request) {
+  const body = await request.text()
+  const signature = headers().get('stripe-signature')!
+  
+  let event: Stripe.Event
+  
+  try {
+    // Verify webhook signature (security!)
+    event = stripe.webhooks.constructEvent(body, signature, webhookSecret)
+  } catch (error) {
+    console.error('Webhook signature verification failed:', error)
+    return NextResponse.json({ error: 'Invalid signature' }, { status: 400 })
+  }
+  
+  // Handle event
+  try {
+    switch (event.type) {
+      case 'payment_intent.succeeded': {
+        const paymentIntent = event.data.object as Stripe.PaymentIntent
+        await handlePaymentSuccess(paymentIntent)
+        break
+      }
+      
+      case 'payment_intent.payment_failed': {
+        const paymentIntent = event.data.object as Stripe.PaymentIntent
+        await handlePaymentFailure(paymentIntent)
+        break
+      }
+      
+      case 'customer.subscription.created':
+      case 'customer.subscription.updated': {
+        const subscription = event.data.object as Stripe.Subscription
+        await handleSubscriptionUpdate(subscription)
+        break
+      }
+      
+      case 'customer.subscription.deleted': {
+        const subscription = event.data.object as Stripe.Subscription
+        await handleSubscriptionCancellation(subscription)
+        break
+      }
+      
+      default:
+        console.log(`Unhandled event type: ${event.type}`)
+    }
+    
+    return NextResponse.json({ received: true })
+    
+  } catch (error) {
+    console.error('Webhook handler error:', error)
+    return NextResponse.json({ error: 'Webhook handler failed' }, { status: 500 })
+  }
+}
+
+async function handlePaymentSuccess(paymentIntent: Stripe.PaymentIntent) {
+  const userId = paymentIntent.metadata.userId
+  
+  if (!userId) {
+    console.error('No userId in payment intent metadata')
+    return
+  }
+  
+  // Check idempotency (already processed?)
+  const existing = await prisma.payment.findUnique({
+    where: { stripePaymentIntentId: paymentIntent.id }
+  })
+  
+  if (existing) {
+    console.log('Payment already processed (idempotency check)')
+    return
+  }
+  
+  // Record payment
+  await prisma.payment.create({
+    data: {
+      userId,
+      stripePaymentIntentId: paymentIntent.id,
+      amount: paymentIntent.amount,
+      currency: paymentIntent.currency,
+      status: 'succeeded'
+    }
+  })
+  
+  console.log(`Payment succeeded: ${paymentIntent.id}`)
+}
+
+async function handlePaymentFailure(paymentIntent: Stripe.PaymentIntent) {
+  const userId = paymentIntent.metadata.userId
+  
+  if (!userId) return
+  
+  await prisma.payment.create({
+    data: {
+      userId,
+      stripePaymentIntentId: paymentIntent.id,
+      amount: paymentIntent.amount,
+      currency: paymentIntent.currency,
+      status: 'failed',
+      failureReason: paymentIntent.last_payment_error?.message
+    }
+  })
+  
+  // TODO: Send email to user (payment failed, update card)
+  
+  console.log(`Payment failed: ${paymentIntent.id}`)
+}
+
+async function handleSubscriptionUpdate(subscription: Stripe.Subscription) {
+  const userId = subscription.metadata.userId
+  
+  if (!userId) return
+  
+  await prisma.user.update({
+    where: { id: userId },
+    data: {
+      stripeSubscriptionId: subscription.id,
+      subscriptionStatus: subscription.status, // active, past_due, canceled, etc.
+      subscriptionPriceId: subscription.items.data[0]?.price.id
+    }
+  })
+  
+  console.log(`Subscription updated: ${subscription.id} → ${subscription.status}`)
+}
+
+async function handleSubscriptionCancellation(subscription: Stripe.Subscription) {
+  const userId = subscription.metadata.userId
+  
+  if (!userId) return
+  
+  await prisma.user.update({
+    where: { id: userId },
+    data: {
+      subscriptionStatus: 'canceled',
+      subscriptionCanceledAt: new Date()
+    }
+  })
+  
+  console.log(`Subscription canceled: ${subscription.id}`)
+}
+```
+```typescript
+// components/SubscriptionForm.tsx
+'use client'
+
+import { useState } from 'react'
+import { loadStripe } from '@stripe/stripe-js'
+import {
+  Elements,
+  PaymentElement,
+  useStripe,
+  useElements
+} from '@stripe/react-stripe-js'
+
+const stripePromise = loadStripe(process.env.NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY!)
+
+export function SubscriptionForm({ priceId }: { priceId: string }) {
+  const [clientSecret, setClientSecret] = useState<string | null>(null)
+  
+  async function createSubscription() {
+    const response = await fetch('/api/stripe/create-payment-intent', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ priceId })
+    })
+    
+    const { clientSecret } = await response.json()
+    setClientSecret(clientSecret)
+  }
+  
+  return (
+    <div>
+      {!clientSecret ? (
+        <button onClick={createSubscription}>
+          Subscribe ($49/month)
+        </button>
+      ) : (
+        <Elements stripe={stripePromise} options={{ clientSecret }}>
+          <CheckoutForm />
+        </Elements>
+      )}
+    </div>
+  )
+}
+
+function CheckoutForm() {
+  const stripe = useStripe()
+  const elements = useElements()
+  const [isProcessing, setIsProcessing] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+  
+  async function handleSubmit(e: React.FormEvent) {
+    e.preventDefault()
+    
+    if (!stripe || !elements) return
+    
+    setIsProcessing(true)
+    setError(null)
+    
+    try {
+      const { error } = await stripe.confirmPayment({
+        elements,
+        confirmParams: {
+          return_url: `${window.location.origin}/dashboard/subscription/success`
+        }
+      })
+      
+      if (error) {
+        setError(error.message || 'Payment failed')
+      }
+    } finally {
+      setIsProcessing(false)
+    }
+  }
+  
+  return (
+    <form onSubmit={handleSubmit}>
+      <PaymentElement />
+      
+      {error && (
+        <div className="text-red-600 mt-2">{error}</div>
+      )}
+      
+      <button
+        type="submit"
+        disabled={!stripe || isProcessing}
+        className="mt-4 px-4 py-2 bg-blue-600 text-white rounded"
+      >
+        {isProcessing ? 'Processing...' : 'Subscribe'}
+      </button>
+    </form>
+  )
+}
+```
+
+3. CONFIGURATION
+```bash
+# .env.local (development)
+STRIPE_SECRET_KEY=sk_test_...
+STRIPE_WEBHOOK_SECRET=whsec_...
+NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY=pk_test_...
+
+# .env.production
+STRIPE_SECRET_KEY=sk_live_...
+STRIPE_WEBHOOK_SECRET=whsec_...
+NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY=pk_live_...
+```
+
+**Stripe Dashboard Setup:**
+1. Create products + prices (monthly plan: $49)
+2. Create webhook endpoint: `https://yourdomain.com/api/webhooks/stripe`
+3. Select events: `payment_intent.*`, `customer.subscription.*`
+4. Copy webhook secret → `.env`
+
+4. TESTS
+```typescript
+// __tests__/integration/stripe-subscription.test.ts
+import { POST as createPaymentIntent } from '@/app/api/stripe/create-payment-intent/route'
+import { stripe } from '@/lib/stripe'
+
+jest.mock('@/lib/stripe')
+
+describe('Stripe subscription integration', () => {
+  it('creates Stripe customer if not exists', async () => {
+    const mockCreate = jest.spyOn(stripe.customers, 'create')
+    mockCreate.mockResolvedValue({ id: 'cus_123' } as any)
+    
+    const response = await createPaymentIntent(mockRequest)
+    
+    expect(mockCreate).toHaveBeenCalledWith({
+      email: 'test@example.com',
+      name: 'Test User',
+      metadata: { userId: 'user-123' }
+    })
+  })
+  
+  it('creates subscription with correct price', async () => {
+    const mockCreate = jest.spyOn(stripe.subscriptions, 'create')
+    
+    await createPaymentIntent(mockRequest)
+    
+    expect(mockCreate).toHaveBeenCalledWith(
+      expect.objectContaining({
+        customer: 'cus_123',
+        items: [{ price: 'price_monthly_49', quantity: 1 }]
+      })
+    )
+  })
+})
+```
+
+5. MONITORING
+```typescript
+// lib/monitoring.ts
+export function trackStripeEvent(event: string, data: any) {
+  // Send to analytics
+  console.log(`[Stripe] ${event}`, data)
+  
+  // Track metrics
+  if (process.env.NODE_ENV === 'production') {
+    // Example: Datadog, New Relic, Mixpanel
+    analytics.track(event, data)
+  }
+}
+
+// Usage:
+trackStripeEvent('subscription_created', {
+  userId,
+  subscriptionId,
+  priceId,
+  amount: 4900
+})
+
+trackStripeEvent('payment_failed', {
+  userId,
+  reason: error.message
+})
+```
+
+VALIDATION CHECKLIST:
+□ Stripe authentication works (test mode + live mode)
+□ Customer creation works (saves stripeCustomerId)
+□ Subscription creation works (returns clientSecret)
+□ Payment succeeds (webhooks received)
+□ Database updated (subscriptionStatus = 'active')
+□ Webhook signature verified (security)
+□ Idempotency works (duplicate webhooks ignored)
+□ Error handling works (payment declined, network failure)
+□ Tests pass (integration tests with mocked Stripe)
+□ Monitoring configured (track subscription events)
+□ API keys secured (in environment variables, not code)
+□ PCI compliant (using Stripe Elements, not handling cards directly)
+═══════════════════════════════════════════════════════════
+````
+
+---
+
+## 🔧 PATTERN #6: REFACTORING PATTERN
+
+### When to Use
+
+**Improving code quality without changing behavior** - making code better without breaking it.
+
+**Examples:**
+- "Refactor this component to use custom hooks"
+- "Extract repeated logic into utility functions"
+- "Simplify this nested conditional logic"
+- "Convert class component to functional component"
+
+**Success Rate:** 85-90% (when existing tests exist)
+
+---
+
+### Pattern Template
+````markdown
+═══════════════════════════════════════════════════════════
+REFACTORING PATTERN TEMPLATE
+═══════════════════════════════════════════════════════════
+
+PERSONA: You are a senior software architect with [YEARS] years of experience 
+refactoring legacy codebases. You understand design patterns, SOLID principles, 
+and how to improve code without breaking it. You've refactored systems with 
+millions of lines of code without introducing regressions.
+
+CONTEXT:
+[Standard 5-layer context]
+
+CODE TO REFACTOR:
+```[language]
+[Paste complete code that needs improvement]
+```
+
+REFACTORING GOAL:
+- Primary: [Main improvement - readability / performance / testability]
+- Secondary: [Additional improvements]
+
+CODE SMELLS IDENTIFIED:
+- [Smell #1: Long function, duplicated code, etc.]
+- [Smell #2]
+- [Smell #3]
+
+CONSTRAINTS:
+- **PRESERVE BEHAVIOR** (all existing functionality must work identically)
+- **NO BREAKING CHANGES** (public API stays same)
+- **MAINTAIN TESTS** (all existing tests must still pass)
+- **INCREMENTAL** (refactor in small, safe steps)
+
+META-INSTRUCTIONS:
+- Understand existing code FIRST (read thoroughly, identify all behaviors)
+- Refactor incrementally (one improvement at a time, not everything at once)
+- Explain WHY each refactoring improves code (readability, performance, testability)
+- Preserve comments that explain business logic (don't delete important context)
+- Run tests after each refactoring step (verify no regressions)
+
+OUTPUT FORMAT:
+
+DELIVERABLES:
+
+1. REFACTORED CODE
+   - Complete refactored code
+   - Highlighted changes (before/after comparison)
+
+2. REFACTORING EXPLANATION
+   - What improved: [Readability, performance, testability]
+   - How: [Specific techniques used]
+   - Why: [Benefits of refactoring]
+
+3. BEHAVIOR VERIFICATION
+   - All public functions work identically
+   - All edge cases handled
+   - Performance unchanged (or improved)
+
+4. TESTING
+   - All existing tests pass
+   - New tests added (if testability improved)
+
+VALIDATION CHECKLIST:
+□ Behavior preserved (no functional changes)
+□ All existing tests pass
+□ Code is more readable (easier to understand)
+□ Code is more maintainable (easier to change)
+□ No performance regression (same speed or faster)
+□ Public API unchanged (no breaking changes)
+═══════════════════════════════════════════════════════════
+````
+
+---
+
+### Real Example: Refactor Form Component
+````markdown
+═══════════════════════════════════════════════════════════
+REFACTORING PATTERN: FORM COMPONENT
+═══════════════════════════════════════════════════════════
+
+PERSONA: You are a senior React architect with 8 years of experience refactoring 
+React applications. You specialize in custom hooks, component composition, and 
+performance optimization. You've refactored hundreds of class components to 
+functional components and improved codebases used by millions of users.
+
+CONTEXT:
+
+PROJECT: SaaS task management app
+TECH STACK: Next.js 14, React, TypeScript, TailwindCSS
+CURRENT: Form component works but is hard to maintain (300 lines, mixed concerns)
+
+CODE TO REFACTOR:
+```typescript
+// components/TaskForm.tsx (BEFORE)
+'use client'
+
+import { useState } from 'react'
+
+export function TaskForm({ onSubmit, initialData }: any) {
+  const [title, setTitle] = useState(initialData?.title || '')
+  const [description, setDescription] = useState(initialData?.description || '')
+  const [priority, setPriority] = useState(initialData?.priority || 'MEDIUM')
+  const [dueDate, setDueDate] = useState(initialData?.dueDate || '')
+  const [assigneeId, setAssigneeId] = useState(initialData?.assigneeId || '')
+  const [errors, setErrors] = useState<any>({})
+  const [isSubmitting, setIsSubmitting] = useState(false)
+  
+  function validateForm() {
+    const newErrors: any = {}
+    
+    if (!title || title.length < 2) {
+      newErrors.title = 'Title must be at least 2 characters'
+    }
+    if (title && title.length > 200) {
+      newErrors.title = 'Title must be less than 200 characters'
+    }
+    if (description && description.length > 10000) {
+      newErrors.description = 'Description too long'
+    }
+    if (!['LOW', 'MEDIUM', 'HIGH', 'URGENT'].includes(priority)) {
+      newErrors.priority = 'Invalid priority'
+    }
+    if (dueDate && new Date(dueDate) < new Date()) {
+      newErrors.dueDate = 'Due date must be in the future'
+    }
+    
+    setErrors(newErrors)
+    return Object.keys(newErrors).length === 0
+  }
+  
+  async function handleSubmit(e: React.FormEvent) {
+    e.preventDefault()
+    
+    if (!validateForm()) {
+      return
+    }
+    
+    setIsSubmitting(true)
+    
+    try {
+      await onSubmit({
+        title,
+        description,
+        priority,
+        dueDate: dueDate || null,
+        assigneeId: assigneeId || null
+      })
+    } catch (error: any) {
+      setErrors({ submit: error.message })
+    } finally {
+      setIsSubmitting(false)
+    }
+  }
+  
+  return (
+    <form onSubmit={handleSubmit} className="space-y-4">
+      <div>
+        <label htmlFor="title" className="block text-sm font-medium">
+          Title *
+        </label>
+        <input
+          id="title"
+          type="text"
+          value={title}
+          onChange={(e) => setTitle(e.target.value)}
+          className="mt-1 block w-full rounded-md border-gray-300"
+        />
+        {errors.title && (
+          <p className="mt-1 text-sm text-red-600">{errors.title}</p>
+        )}
+      </div>
+      
+      <div>
+        <label htmlFor="description" className="block text-sm font-medium">
+          Description
+        </label>
+        <textarea
+          id="description"
+          value={description}
+          onChange={(e) => setDescription(e.target.value)}
+          rows={4}
+          className="mt-1 block w-full rounded-md border-gray-300"
+        />
+        {errors.description && (
+          <p className="mt-1 text-sm text-red-600">{errors.description}</p>
+        )}
+      </div>
+      
+      <div>
+        <label htmlFor="priority" className="block text-sm font-medium">
+          Priority
+        </label>
+        <select
+          id="priority"
+          value={priority}
+          onChange={(e) => setPriority(e.target.value)}
+          className="mt-1 block w-full rounded-md border-gray-300"
+        >
+          <option value="LOW">Low</option>
+          <option value="MEDIUM">Medium</option>
+          <option value="HIGH">High</option>
+          <option value="URGENT">Urgent</option>
+        </select>
+      </div>
+      
+      <div>
+        <label htmlFor="dueDate" className="block text-sm font-medium">
+          Due Date
+        </label>
+        <input
+          id="dueDate"
+          type="date"
+          value={dueDate}
+          onChange={(e) => setDueDate(e.target.value)}
+          className="mt-1 block w-full rounded-md border-gray-300"
+        />
+        {errors.dueDate && (
+          <p className="mt-1 text-sm text-red-600">{errors.dueDate}</p>
+        )}
+      </div>
+      
+      {errors.submit && (
+        <div className="rounded-md bg-red-50 p-4">
+          <p className="text-sm text-red-800">{errors.submit}</p>
+        </div>
+      )}
+      
+      <div className="flex gap-2">
+        <button
+          type="button"
+          onClick={() => window.history.back()}
+          className="px-4 py-2 border rounded-md"
+        >
+          Cancel
+        </button>
+        <button
+          type="submit"
+          disabled={isSubmitting}
+          className="px-4 py-2 bg-blue-600 text-white rounded-md disabled:opacity-50"
+        >
+          {isSubmitting ? 'Saving...' : 'Save Task'}
+        </button>
+      </div>
+    </form>
+  )
+}
+```
+
+REFACTORING GOAL:
+- Primary: Improve maintainability (extract hooks, separate concerns)
+- Secondary: Improve testability (pure functions), add TypeScript types
+
+CODE SMELLS IDENTIFIED:
+- **Long component** (300 lines, too much in one file)
+- **Mixed concerns** (form state + validation + submission in one component)
+- **Repeated patterns** (each field has same structure)
+- **Weak typing** (`any` types, no validation schema)
+- **Hard to test** (logic mixed with UI)
+
+CONSTRAINTS:
+- **PRESERVE BEHAVIOR** (form must work identically)
+- **NO BREAKING CHANGES** (props interface stays same)
+- **MAINTAIN TESTS** (if tests exist, they must pass)
+
+META-INSTRUCTIONS:
+- Extract custom hook (`useTaskForm`) for form state + validation
+- Extract reusable `FormField` component (DRY principle)
+- Use Zod for type-safe validation
+- Separate UI from logic (easier to test)
+- Keep public API identical (onSubmit, initialData props)
+
+OUTPUT FORMAT:
+
+DELIVERABLES:
+
+1. REFACTORED CODE
+```typescript
+// lib/validations/task.ts (NEW FILE - validation schema)
+import { z } from 'zod'
+
+export const taskSchema = z.object({
+  title: z.string().min(2, 'Title must be at least 2 characters').max(200),
+  description: z.string().max(10000, 'Description too long').optional(),
+  priority: z.enum(['LOW', 'MEDIUM', 'HIGH', 'URGENT']),
+  dueDate: z.string().datetime().optional().refine(
+    (date) => !date || new Date(date) >= new Date(),
+    'Due date must be in the future'
+  ),
+  assigneeId: z.string().optional()
+})
+
+export type TaskFormData = z.infer<typeof taskSchema>
+```
+```typescript
+// hooks/useTaskForm.ts (NEW FILE - custom hook)
+import { useState } from 'react'
+import { taskSchema, type TaskFormData } from '@/lib/validations/task'
+import { z } from 'zod'
+
+export function useTaskForm(initialData?: Partial<TaskFormData>) {
+  const [formData, setFormData] = useState<TaskFormData>({
+    title: initialData?.title || '',
+    description: initialData?.description || '',
+    priority: initialData?.priority || 'MEDIUM',
+    dueDate: initialData?.dueDate || '',
+    assigneeId: initialData?.assigneeId || ''
+  })
+  
+  const [errors, setErrors] = useState<Record<string, string>>({})
+  const [isSubmitting, setIsSubmitting] = useState(false)
+  
+  function updateField<K extends keyof TaskFormData>(
+    field: K,
+    value: TaskFormData[K]
+  ) {
+    setFormData(prev => ({ ...prev, [field]: value }))
+    // Clear error for this field when user types
+    if (errors[field]) {
+      setErrors(prev => {
+        const newErrors = { ...prev }
+        delete newErrors[field]
+        return newErrors
+      })
+    }
+  }
+  
+  function validate(): boolean {
+    try {
+      taskSchema.parse(formData)
+      setErrors({})
+      return true
+    } catch (error) {
+      if (error instanceof z.ZodError) {
+        const newErrors: Record<string, string> = {}
+        error.errors.forEach((err) => {
+          if (err.path[0]) {
+            newErrors[err.path[0].toString()] = err.message
+          }
+        })
+        setErrors(newErrors)
+      }
+      return false
+    }
+  }
+  
+  async function handleSubmit(
+    e: React.FormEvent,
+    onSubmit: (data: TaskFormData) => Promise<void>
+  ) {
+    e.preventDefault()
+    
+    if (!validate()) {
+      return
+    }
+    
+    setIsSubmitting(true)
+    
+    try {
+      await onSubmit(formData)
+    } catch (error: any) {
+      setErrors({ submit: error.message })
+    } finally {
+      setIsSubmitting(false)
+    }
+  }
+  
+  return {
+    formData,
+    errors,
+    isSubmitting,
+    updateField,
+    handleSubmit
+  }
+}
+```
+```typescript
+// components/FormField.tsx (NEW FILE - reusable component)
+interface FormFieldProps {
+  label: string
+  error?: string
+  required?: boolean
+  children: React.ReactNode
+}
+
+export function FormField({ label, error, required, children }: FormFieldProps) {
+  return (
+    <div>
+      <label className="block text-sm font-medium text-gray-700">
+        {label} {required && <span className="text-red-600">*</span>}
+      </label>
+      <div className="mt-1">
+        {children}
+      </div>
+      {error && (
+        <p className="mt-1 text-sm text-red-600">{error}</p>
+      )}
+    </div>
+  )
+}
+```
+```typescript
+// components/TaskForm.tsx (REFACTORED)
+'use client'
+
+import { useTaskForm } from '@/hooks/useTaskForm'
+import { FormField } from '@/components/FormField'
+import type { TaskFormData } from '@/lib/validations/task'
+
+interface TaskFormProps {
+  onSubmit: (data: TaskFormData) => Promise<void>
+  initialData?: Partial<TaskFormData>
+}
+
+export function TaskForm({ onSubmit, initialData }: TaskFormProps) {
+  const { formData, errors, isSubmitting, updateField, handleSubmit } = 
+    useTaskForm(initialData)
+  
+  return (
+    <form
+      onSubmit={(e) => handleSubmit(e, onSubmit)}
+      className="space-y-4"
+    >
+      <FormField label="Title" error={errors.title} required>
+        <input
+          id="title"
+          type="text"
+          value={formData.title}
+          onChange={(e) => updateField('title', e.target.value)}
+          className="block w-full rounded-md border-gray-300"
+        />
+      </FormField>
+      
+      <FormField label="Description" error={errors.description}>
+        <textarea
+          id="description"
+          value={formData.description}
+          onChange={(e) => updateField('description', e.target.value)}
+          rows={4}
+          className="block w-full rounded-md border-gray-300"
+        />
+      </FormField>
+      
+      <FormField label="Priority">
+        <select
+          id="priority"
+          value={formData.priority}
+          onChange={(e) => updateField('priority', e.target.value as any)}
+          className="block w-full rounded-md border-gray-300"
+        >
+          <option value="LOW">Low</option>
+          <option value="MEDIUM">Medium</option>
+          <option value="HIGH">High</option>
+          <option value="URGENT">Urgent</option>
+        </select>
+      </FormField>
+      
+      <FormField label="Due Date" error={errors.dueDate}>
+        <input
+          id="dueDate"
+          type="date"
+          value={formData.dueDate}
+          onChange={(e) => updateField('dueDate', e.target.value)}
+          className="block w-full rounded-md border-gray-300"
+        />
+      </FormField>
+      
+      {errors.submit && (
+        <div className="rounded-md bg-red-50 p-4">
+          <p className="text-sm text-red-800">{errors.submit}</p>
+        </div>
+      )}
+      
+      <div className="flex gap-2">
+        <button
+          type="button"
+          onClick={() => window.history.back()}
+          className="px-4 py-2 border rounded-md"
+        >
+          Cancel
+        </button>
+        <button
+          type="submit"
+          disabled={isSubmitting}
+          className="px-4 py-2 bg-blue-600 text-white rounded-md disabled:opacity-50"
+        >
+          {isSubmitting ? 'Saving...' : 'Save Task'}
+        </button>
+      </div>
+    </form>
+  )
+}
+```
+
+2. REFACTORING EXPLANATION
+
+**WHAT IMPROVED:**
+
+1. **Maintainability** ⬆️
+   - Before: 300 lines in one file
+   - After: Split into 4 files (60-80 lines each)
+   - Easier to find and modify code
+
+2. **Testability** ⬆️
+   - Before: Hard to test (UI + logic mixed)
+   - After: `useTaskForm` hook is pure logic (easy to test)
+   - Validation schema separate (can test independently)
+
+3. **Type Safety** ⬆️
+   - Before: `any` types everywhere
+   - After: Zod schema + TypeScript types
+   - Compile-time type checking
+
+4. **Reusability** ⬆️
+   - Before: Form field logic repeated 4 times
+   - After: `FormField` component (DRY)
+   - Can reuse in other forms
+
+**HOW:**
+
+1. **Extracted custom hook** (`useTaskForm`)
+   - Moved all form state management to hook
+   - Moved validation logic to hook
+   - Component now only handles rendering
+
+2. **Created validation schema** (Zod)
+   - Centralized validation rules
+   - Type-safe (TypeScript infers types from schema)
+   - Easier to modify validation rules
+
+3. **Extracted reusable component** (`FormField`)
+   - DRY principle (Don't Repeat Yourself)
+   - Consistent styling across all fields
+   - Easier to update styling globally
+
+4. **Added TypeScript types**
+   - Replaced `any` with proper types
+   - `TaskFormData` type inferred from Zod schema
+   - Compile-time safety
+
+**WHY:**
+
+- **Easier to maintain:** Changes to validation don't require touching UI
+- **Easier to test:** Can test hook + schema separately from UI
+- **Easier to extend:** Adding new field = add to schema + one `FormField`
+- **Type-safe:** Catch errors at compile time, not runtime
+
+3. BEHAVIOR VERIFICATION
+
+**All public functions work identically:**
+- ✅ `onSubmit` called with same data structure
+- ✅ `initialData` prop works (pre-fills form)
+- ✅ Validation errors displayed in same way
+- ✅ Submit button disabled during submission
+- ✅ Error handling identical
+
+**Edge cases handled:**
+- ✅ Empty title → validation error
+- ✅ Title too long → validation error
+- ✅ Past due date → validation error
+- ✅ Optional fields (description, dueDate, assigneeId)
+
+**Performance:**
+- ✅ No performance regression (same number of renders)
+- ✅ Validation happens on submit (not on every keystroke)
+
+4. TESTING
+
+**Tests for custom hook:**
+```typescript
+// __tests__/hooks/useTaskForm.test.ts
+import { renderHook, act } from '@testing-library/react'
+import { useTaskForm } from '@/hooks/useTaskForm'
+
+describe('useTaskForm', () => {
+  it('initializes with default values', () => {
+    const { result } = renderHook(() => useTaskForm())
+    
+    expect(result.current.formData.title).toBe('')
+    expect(result.current.formData.priority).toBe('MEDIUM')
+  })
+  
+  it('initializes with provided data', () => {
+    const { result } = renderHook(() => 
+      useTaskForm({ title: 'Test Task', priority: 'HIGH' })
+    )
+    
+    expect(result.current.formData.title).toBe('Test Task')
+    expect(result.current.formData.priority).toBe('HIGH')
+  })
+  
+  it('updates field value', () => {
+    const { result } = renderHook(() => useTaskForm())
+    
+    act(() => {
+      result.current.updateField('title', 'New Title')
+    })
+    
+    expect(result.current.formData.title).toBe('New Title')
+  })
+  
+  it('validates form and shows errors', () => {
+    const { result } = renderHook(() => useTaskForm())
+    
+    act(() => {
+      result.current.updateField('title', 'A')  // Too short
+    })
+    
+    act(() => {
+      result.current.handleSubmit(
+        new Event('submit') as any,
+        async () => {}
+      )
+    })
+    
+    expect(result.current.errors.title).toBe('Title must be at least 2 characters')
+  })
+})
+```
+
+**Tests for validation schema:**
+```typescript
+// __tests__/validations/task.test.ts
+import { taskSchema } from '@/lib/validations/task'
+
+describe('taskSchema', () => {
+  it('validates valid data', () => {
+    const validData = {
+      title: 'Valid Title',
+      priority: 'MEDIUM'
+    }
+    
+    expect(() => taskSchema.parse(validData)).not.toThrow()
+  })
+  
+  it('rejects title too short', () => {
+    const invalidData = {
+      title: 'A',
+      priority: 'MEDIUM'
+    }
+    
+    expect(() => taskSchema.parse(invalidData)).toThrow('Title must be at least 2 characters')
+  })
+  
+  it('rejects past due date', () => {
+    const yesterday = new Date()
+    yesterday.setDate(yesterday.getDate() - 1)
+    
+    const invalidData = {
+      title: 'Valid Title',
+      priority: 'MEDIUM',
+      dueDate: yesterday.toISOString()
+    }
+    
+    expect(() => taskSchema.parse(invalidData)).toThrow('Due date must be in the future')
+  })
+})
+```
+
+VALIDATION CHECKLIST:
+□ Behavior preserved (form works identically)
+□ All existing tests pass (if any existed)
+□ Code is more readable (split into logical files)
+□ Code is more maintainable (easier to modify)
+□ Code is more testable (hook + schema isolated)
+□ No performance regression (same render count)
+□ Public API unchanged (props interface identical)
+□ Type-safe (Zod + TypeScript types)
+□ DRY principle applied (FormField reused)
+□ New tests added (for hook + schema)
+═══════════════════════════════════════════════════════════
+````
+
+---
