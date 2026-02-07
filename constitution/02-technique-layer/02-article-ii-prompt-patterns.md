@@ -3812,3 +3812,1035 @@ VALIDATION CHECKLIST:
 ````
 
 ---
+---
+
+## ✅ PATTERN #7: TESTING PATTERN
+
+### When to Use
+
+**Writing tests for existing code** - adding automated tests to ensure code works correctly.
+
+**Examples:**
+- "Write unit tests for this authentication service"
+- "Create E2E tests for the checkout flow"
+- "Add integration tests for the API endpoints"
+- "Write Playwright tests for user dashboard"
+
+**Success Rate:** 90-95% (when code is testable)
+
+---
+
+### Pattern Template
+````markdown
+═══════════════════════════════════════════════════════════
+TESTING PATTERN TEMPLATE
+═══════════════════════════════════════════════════════════
+
+PERSONA: You are a senior QA automation engineer with [YEARS] years of experience 
+writing comprehensive test suites. You understand the testing pyramid (unit, 
+integration, E2E), test-driven development, and how to write maintainable tests. 
+You've achieved 90%+ code coverage in production systems.
+
+CONTEXT:
+[Standard 5-layer context]
+
+CODE TO TEST:
+```[language]
+[Paste code that needs tests]
+```
+
+TESTING REQUIREMENTS:
+
+TEST TYPE:
+- [ ] Unit tests (functions, utilities, business logic)
+- [ ] Integration tests (API routes, database operations)
+- [ ] E2E tests (user flows, critical paths)
+- [ ] Component tests (React components, UI)
+
+COVERAGE GOAL:
+- Minimum: [X%] coverage
+- Priority: [Critical paths first, then edge cases]
+
+TESTING FRAMEWORK:
+- Unit/Integration: [Jest / Vitest]
+- E2E: [Playwright / Cypress]
+- Component: [React Testing Library]
+
+WHAT TO TEST:
+1. Happy path (normal flow works)
+2. Edge cases (boundary conditions)
+3. Error cases (failures handled gracefully)
+4. Security (authentication, authorization)
+
+META-INSTRUCTIONS:
+- Test behavior, not implementation (test what, not how)
+- Write readable test names (describe what's being tested)
+- Follow AAA pattern (Arrange, Act, Assert)
+- Mock external dependencies (APIs, database, file system)
+- Test one thing per test (single responsibility)
+- Make tests independent (no shared state)
+
+OUTPUT FORMAT:
+
+DELIVERABLES:
+
+1. TEST FILES
+   - [filename].test.ts (unit tests)
+   - [filename].integration.test.ts (integration tests)
+   - [filename].spec.ts (E2E tests with Playwright)
+
+2. TEST COVERAGE REPORT
+   - Coverage percentage
+   - Uncovered lines (if any)
+   - Missing test cases
+
+3. TEST DOCUMENTATION
+   - How to run tests
+   - Test structure explanation
+   - Mock data/fixtures
+
+VALIDATION CHECKLIST:
+□ All tests pass
+□ Coverage goal met (X% minimum)
+□ Happy path tested
+□ Edge cases tested
+□ Error cases tested
+□ Tests are readable (clear names)
+□ Tests are maintainable (no duplication)
+□ Tests are fast (<5s for unit, <1min for integration)
+═══════════════════════════════════════════════════════════
+````
+
+---
+
+### Real Example: Testing Authentication API
+````markdown
+═══════════════════════════════════════════════════════════
+TESTING PATTERN: AUTHENTICATION API
+═══════════════════════════════════════════════════════════
+
+PERSONA: You are a senior QA engineer with 12 years of experience testing 
+authentication systems. You've written comprehensive test suites for banking 
+applications and understand security testing, edge cases, and how to mock 
+external dependencies effectively.
+
+CONTEXT:
+
+PROJECT: B2B SaaS platform
+TECH STACK: Next.js 14, Prisma, PostgreSQL, bcrypt
+TEST FRAMEWORK: Jest, Supertest (API testing)
+COVERAGE GOAL: 90% minimum
+
+CODE TO TEST:
+```typescript
+// app/api/auth/register/route.ts
+import { NextResponse } from 'next/server'
+import { prisma } from '@/lib/prisma'
+import bcrypt from 'bcryptjs'
+import { z } from 'zod'
+
+const registerSchema = z.object({
+  email: z.string().email(),
+  password: z.string().min(8),
+  name: z.string().min(2).max(50)
+})
+
+export async function POST(request: Request) {
+  const body = await request.json()
+  
+  const result = registerSchema.safeParse(body)
+  
+  if (!result.success) {
+    return NextResponse.json(
+      { error: 'Validation failed', details: result.error.format() },
+      { status: 400 }
+    )
+  }
+  
+  const { email, password, name } = result.data
+  
+  // Check if user already exists
+  const existing = await prisma.user.findUnique({
+    where: { email }
+  })
+  
+  if (existing) {
+    return NextResponse.json(
+      { error: 'Email already registered' },
+      { status: 409 }
+    )
+  }
+  
+  // Hash password
+  const passwordHash = await bcrypt.hash(password, 12)
+  
+  // Create user
+  const user = await prisma.user.create({
+    data: {
+      email,
+      name,
+      password: passwordHash
+    }
+  })
+  
+  return NextResponse.json(
+    {
+      id: user.id,
+      email: user.email,
+      name: user.name
+    },
+    { status: 201 }
+  )
+}
+```
+
+TESTING REQUIREMENTS:
+
+TEST TYPE:
+- [x] Unit tests (validation logic)
+- [x] Integration tests (API endpoint with database)
+- [ ] E2E tests (not needed for API route)
+
+COVERAGE GOAL: 90% minimum
+
+WHAT TO TEST:
+1. Happy path (successful registration)
+2. Validation errors (invalid email, short password)
+3. Duplicate email (409 conflict)
+4. Password hashing (bcrypt used correctly)
+5. Response format (no password in response)
+
+META-INSTRUCTIONS:
+- Mock Prisma for unit tests
+- Use test database for integration tests
+- Test security (password hashed, not returned)
+- Verify bcrypt cost factor (12)
+
+OUTPUT FORMAT:
+
+1. TEST FILES
+```typescript
+// __tests__/api/auth/register.test.ts (INTEGRATION TESTS)
+import { POST } from '@/app/api/auth/register/route'
+import { prisma } from '@/lib/prisma'
+import bcrypt from 'bcryptjs'
+
+// Mock Prisma
+jest.mock('@/lib/prisma', () => ({
+  prisma: {
+    user: {
+      findUnique: jest.fn(),
+      create: jest.fn()
+    }
+  }
+}))
+
+// Mock bcrypt
+jest.mock('bcryptjs')
+
+describe('POST /api/auth/register', () => {
+  beforeEach(() => {
+    jest.clearAllMocks()
+  })
+  
+  describe('Happy Path', () => {
+    it('creates new user with valid data', async () => {
+      const mockUser = {
+        id: 'user-123',
+        email: 'test@example.com',
+        name: 'Test User',
+        password: 'hashed_password'
+      }
+      
+      // Mock: User doesn't exist
+      ;(prisma.user.findUnique as jest.Mock).mockResolvedValue(null)
+      
+      // Mock: Password hashing
+      ;(bcrypt.hash as jest.Mock).mockResolvedValue('hashed_password')
+      
+      // Mock: User creation
+      ;(prisma.user.create as jest.Mock).mockResolvedValue(mockUser)
+      
+      const request = new Request('http://localhost:3000/api/auth/register', {
+        method: 'POST',
+        body: JSON.stringify({
+          email: 'test@example.com',
+          password: 'password123',
+          name: 'Test User'
+        })
+      })
+      
+      const response = await POST(request)
+      const data = await response.json()
+      
+      expect(response.status).toBe(201)
+      expect(data).toEqual({
+        id: 'user-123',
+        email: 'test@example.com',
+        name: 'Test User'
+      })
+      
+      // Verify password NOT in response
+      expect(data.password).toBeUndefined()
+      
+      // Verify bcrypt called with cost factor 12
+      expect(bcrypt.hash).toHaveBeenCalledWith('password123', 12)
+      
+      // Verify user created with hashed password
+      expect(prisma.user.create).toHaveBeenCalledWith({
+        data: {
+          email: 'test@example.com',
+          name: 'Test User',
+          password: 'hashed_password'
+        }
+      })
+    })
+  })
+  
+  describe('Validation Errors', () => {
+    it('rejects invalid email', async () => {
+      const request = new Request('http://localhost:3000/api/auth/register', {
+        method: 'POST',
+        body: JSON.stringify({
+          email: 'invalid-email',
+          password: 'password123',
+          name: 'Test User'
+        })
+      })
+      
+      const response = await POST(request)
+      const data = await response.json()
+      
+      expect(response.status).toBe(400)
+      expect(data.error).toBe('Validation failed')
+      expect(data.details.email).toBeDefined()
+    })
+    
+    it('rejects password shorter than 8 characters', async () => {
+      const request = new Request('http://localhost:3000/api/auth/register', {
+        method: 'POST',
+        body: JSON.stringify({
+          email: 'test@example.com',
+          password: 'short',
+          name: 'Test User'
+        })
+      })
+      
+      const response = await POST(request)
+      const data = await response.json()
+      
+      expect(response.status).toBe(400)
+      expect(data.details.password).toBeDefined()
+    })
+    
+    it('rejects name shorter than 2 characters', async () => {
+      const request = new Request('http://localhost:3000/api/auth/register', {
+        method: 'POST',
+        body: JSON.stringify({
+          email: 'test@example.com',
+          password: 'password123',
+          name: 'A'
+        })
+      })
+      
+      const response = await POST(request)
+      
+      expect(response.status).toBe(400)
+    })
+    
+    it('rejects missing required fields', async () => {
+      const request = new Request('http://localhost:3000/api/auth/register', {
+        method: 'POST',
+        body: JSON.stringify({})
+      })
+      
+      const response = await POST(request)
+      
+      expect(response.status).toBe(400)
+    })
+  })
+  
+  describe('Duplicate Email', () => {
+    it('returns 409 if email already exists', async () => {
+      const existingUser = {
+        id: 'user-456',
+        email: 'existing@example.com',
+        name: 'Existing User',
+        password: 'hashed'
+      }
+      
+      // Mock: User exists
+      ;(prisma.user.findUnique as jest.Mock).mockResolvedValue(existingUser)
+      
+      const request = new Request('http://localhost:3000/api/auth/register', {
+        method: 'POST',
+        body: JSON.stringify({
+          email: 'existing@example.com',
+          password: 'password123',
+          name: 'Test User'
+        })
+      })
+      
+      const response = await POST(request)
+      const data = await response.json()
+      
+      expect(response.status).toBe(409)
+      expect(data.error).toBe('Email already registered')
+      
+      // Verify user.create NOT called
+      expect(prisma.user.create).not.toHaveBeenCalled()
+    })
+  })
+  
+  describe('Database Errors', () => {
+    it('handles database connection failure', async () => {
+      ;(prisma.user.findUnique as jest.Mock).mockRejectedValue(
+        new Error('Database connection failed')
+      )
+      
+      const request = new Request('http://localhost:3000/api/auth/register', {
+        method: 'POST',
+        body: JSON.stringify({
+          email: 'test@example.com',
+          password: 'password123',
+          name: 'Test User'
+        })
+      })
+      
+      // Should throw error (no try-catch in route)
+      await expect(POST(request)).rejects.toThrow('Database connection failed')
+    })
+  })
+  
+  describe('Security', () => {
+    it('hashes password with bcrypt cost factor 12', async () => {
+      ;(prisma.user.findUnique as jest.Mock).mockResolvedValue(null)
+      ;(bcrypt.hash as jest.Mock).mockResolvedValue('hashed')
+      ;(prisma.user.create as jest.Mock).mockResolvedValue({
+        id: 'user-123',
+        email: 'test@example.com',
+        name: 'Test',
+        password: 'hashed'
+      })
+      
+      const request = new Request('http://localhost:3000/api/auth/register', {
+        method: 'POST',
+        body: JSON.stringify({
+          email: 'test@example.com',
+          password: 'password123',
+          name: 'Test'
+        })
+      })
+      
+      await POST(request)
+      
+      // Verify bcrypt.hash called with cost factor 12
+      expect(bcrypt.hash).toHaveBeenCalledWith('password123', 12)
+    })
+    
+    it('does not return password in response', async () => {
+      ;(prisma.user.findUnique as jest.Mock).mockResolvedValue(null)
+      ;(bcrypt.hash as jest.Mock).mockResolvedValue('hashed')
+      ;(prisma.user.create as jest.Mock).mockResolvedValue({
+        id: 'user-123',
+        email: 'test@example.com',
+        name: 'Test',
+        password: 'hashed_password_should_not_be_returned'
+      })
+      
+      const request = new Request('http://localhost:3000/api/auth/register', {
+        method: 'POST',
+        body: JSON.stringify({
+          email: 'test@example.com',
+          password: 'password123',
+          name: 'Test'
+        })
+      })
+      
+      const response = await POST(request)
+      const data = await response.json()
+      
+      expect(data.password).toBeUndefined()
+      expect(data.passwordHash).toBeUndefined()
+    })
+  })
+})
+```
+```typescript
+// __tests__/integration/auth-flow.test.ts (E2E-STYLE INTEGRATION)
+import { POST as registerPOST } from '@/app/api/auth/register/route'
+import { prisma } from '@/lib/prisma'
+
+// Use real database (test database, not mocked)
+describe('Authentication Flow (Integration)', () => {
+  beforeEach(async () => {
+    // Clear users table before each test
+    await prisma.user.deleteMany()
+  })
+  
+  afterAll(async () => {
+    await prisma.$disconnect()
+  })
+  
+  it('registers new user end-to-end', async () => {
+    const request = new Request('http://localhost:3000/api/auth/register', {
+      method: 'POST',
+      body: JSON.stringify({
+        email: 'integration@example.com',
+        password: 'secure_password_123',
+        name: 'Integration Test'
+      })
+    })
+    
+    const response = await registerPOST(request)
+    const data = await response.json()
+    
+    expect(response.status).toBe(201)
+    expect(data.email).toBe('integration@example.com')
+    
+    // Verify user actually created in database
+    const user = await prisma.user.findUnique({
+      where: { email: 'integration@example.com' }
+    })
+    
+    expect(user).toBeDefined()
+    expect(user?.name).toBe('Integration Test')
+    
+    // Verify password is hashed (not plaintext)
+    expect(user?.password).not.toBe('secure_password_123')
+    expect(user?.password.length).toBeGreaterThan(50) // bcrypt hashes are long
+  })
+  
+  it('prevents duplicate registration', async () => {
+    // First registration
+    await registerPOST(new Request('http://localhost:3000/api/auth/register', {
+      method: 'POST',
+      body: JSON.stringify({
+        email: 'duplicate@example.com',
+        password: 'password123',
+        name: 'First User'
+      })
+    }))
+    
+    // Second registration (should fail)
+    const response = await registerPOST(new Request('http://localhost:3000/api/auth/register', {
+      method: 'POST',
+      body: JSON.stringify({
+        email: 'duplicate@example.com',
+        password: 'different_password',
+        name: 'Second User'
+      })
+    }))
+    
+    expect(response.status).toBe(409)
+    
+    // Verify only one user exists
+    const users = await prisma.user.findMany({
+      where: { email: 'duplicate@example.com' }
+    })
+    
+    expect(users.length).toBe(1)
+    expect(users[0].name).toBe('First User')
+  })
+})
+```
+
+2. TEST COVERAGE REPORT
+```bash
+# Run tests with coverage
+npm test -- --coverage
+
+# Output:
+----------------------|---------|----------|---------|---------|-------------------
+File                  | % Stmts | % Branch | % Funcs | % Lines | Uncovered Lines
+----------------------|---------|----------|---------|---------|-------------------
+auth/register/route.ts|   95.45 |    91.67 |     100 |   95.24 | 23-24
+----------------------|---------|----------|---------|---------|-------------------
+
+Coverage Summary:
+- Statements: 95.45% (21/22 covered)
+- Branches: 91.67% (11/12 covered)
+- Functions: 100% (1/1 covered)
+- Lines: 95.24% (20/21 covered)
+
+Uncovered:
+- Lines 23-24: Error handling for database failures (tested but not counted due to throw)
+
+✅ Coverage goal met (90% minimum)
+```
+
+3. TEST DOCUMENTATION
+
+**How to Run Tests:**
+```bash
+# Unit tests only
+npm test
+
+# Integration tests (requires test database)
+npm run test:integration
+
+# All tests with coverage
+npm test -- --coverage
+
+# Watch mode (for development)
+npm test -- --watch
+
+# Specific test file
+npm test -- register.test.ts
+```
+
+**Test Structure:**
+```
+__tests__/
+├── api/
+│   └── auth/
+│       ├── register.test.ts        (Unit tests - mocked Prisma)
+│       └── login.test.ts
+├── integration/
+│   └── auth-flow.test.ts           (Integration - real database)
+└── e2e/
+    └── auth-user-flow.spec.ts      (Playwright E2E)
+```
+
+**Mock Data:**
+```typescript
+// __tests__/fixtures/users.ts
+export const mockUsers = {
+  validUser: {
+    email: 'test@example.com',
+    password: 'password123',
+    name: 'Test User'
+  },
+  existingUser: {
+    id: 'user-456',
+    email: 'existing@example.com',
+    name: 'Existing User',
+    password: 'hashed_password'
+  },
+  invalidEmail: {
+    email: 'invalid-email',
+    password: 'password123',
+    name: 'Test'
+  }
+}
+```
+
+**Test Database Setup:**
+```typescript
+// jest.setup.ts
+import { PrismaClient } from '@prisma/client'
+
+const prisma = new PrismaClient({
+  datasources: {
+    db: {
+      url: process.env.DATABASE_URL_TEST
+    }
+  }
+})
+
+beforeAll(async () => {
+  // Run migrations on test database
+  await prisma.$executeRaw`CREATE DATABASE IF NOT EXISTS test_db`
+})
+
+afterAll(async () => {
+  await prisma.$disconnect()
+})
+```
+
+VALIDATION CHECKLIST:
+□ All tests pass (22/22 passing)
+□ Coverage goal met (95.45% > 90%)
+□ Happy path tested (successful registration)
+□ Edge cases tested (invalid email, short password, duplicate)
+□ Error cases tested (database failure)
+□ Security tested (password hashing, not returned in response)
+□ Tests are readable (clear describe/it blocks)
+□ Tests are maintainable (use fixtures, no duplication)
+□ Tests are fast (unit tests <2s, integration <10s)
+□ Integration tests use real database (not mocked)
+═══════════════════════════════════════════════════════════
+````
+
+---
+
+## 🏛️ PATTERN #8: ARCHITECTURE PATTERN
+
+### When to Use
+
+**Designing system architecture from scratch** - planning how components/services will work together.
+
+**Examples:**
+- "Design architecture for a multi-tenant SaaS application"
+- "Plan microservices architecture for e-commerce platform"
+- "Design database schema for social media app"
+- "Architect real-time collaboration system"
+
+**Success Rate:** 70-80% (requires deep domain understanding)
+
+---
+
+### Pattern Template
+````markdown
+═══════════════════════════════════════════════════════════
+ARCHITECTURE PATTERN TEMPLATE
+═══════════════════════════════════════════════════════════
+
+PERSONA: You are a principal software architect with [YEARS] years of experience 
+designing scalable systems. You've architected platforms serving millions of users 
+and understand trade-offs between different architectural patterns (monolith, 
+microservices, serverless, event-driven).
+
+CONTEXT:
+[Standard 5-layer context]
+
+SYSTEM REQUIREMENTS:
+
+FUNCTIONAL:
+- [Key feature #1]
+- [Key feature #2]
+- [Key feature #3]
+
+NON-FUNCTIONAL:
+- Scale: [Users, requests/sec, data volume]
+- Performance: [Latency requirements]
+- Availability: [Uptime requirements]
+- Consistency: [Strong / Eventual]
+
+CONSTRAINTS:
+- Budget: [Infrastructure budget]
+- Team: [Team size, skill level]
+- Timeline: [Delivery timeline]
+- Compliance: [Regulations]
+
+TASK: Design a comprehensive architecture for [SYSTEM] that [GOALS] while 
+meeting [REQUIREMENTS].
+
+ARCHITECTURE DECISIONS:
+
+1. SYSTEM ARCHITECTURE:
+   - [ ] Monolith
+   - [ ] Microservices
+   - [ ] Serverless
+   - [ ] Hybrid
+
+2. DATABASE STRATEGY:
+   - [ ] Single database
+   - [ ] Database per service
+   - [ ] CQRS (read/write separation)
+
+3. COMMUNICATION:
+   - [ ] Synchronous (REST, GraphQL)
+   - [ ] Asynchronous (queues, pub/sub)
+   - [ ] Real-time (WebSockets, SSE)
+
+4. SCALABILITY:
+   - [ ] Vertical (bigger servers)
+   - [ ] Horizontal (more servers)
+   - [ ] Auto-scaling
+
+META-INSTRUCTIONS:
+- Start with high-level architecture (system diagram)
+- Make trade-offs explicit (why X over Y)
+- Consider failure modes (what if service X fails?)
+- Plan for scale (what happens at 10x growth?)
+- Document architectural decisions (ADRs)
+
+OUTPUT FORMAT:
+
+DELIVERABLES:
+
+1. ARCHITECTURE DIAGRAM
+   - High-level system diagram
+   - Component interactions
+   - Data flow
+
+2. TECHNOLOGY STACK
+   - Frontend: [Framework]
+   - Backend: [Framework, language]
+   - Database: [Type, specific tech]
+   - Infrastructure: [Cloud provider, services]
+
+3. ARCHITECTURE DECISION RECORDS (ADRs)
+   - Decision: [What was decided]
+   - Context: [Why this decision]
+   - Consequences: [Pros and cons]
+
+4. SCALABILITY PLAN
+   - Current capacity
+   - Scaling strategy
+   - Bottlenecks to address
+
+5. SECURITY ARCHITECTURE
+   - Authentication/Authorization
+   - Data encryption
+   - Network security
+
+VALIDATION CHECKLIST:
+□ Meets functional requirements
+□ Meets non-functional requirements (scale, performance)
+□ Fits within budget constraints
+□ Team can implement (skill match)
+□ Scalable (handles growth)
+□ Secure (passes security review)
+□ Documented (ADRs written)
+═══════════════════════════════════════════════════════════
+````
+
+---
+
+*(Due to length, Architecture Pattern real example will be concise)*
+
+### Real Example: Multi-Tenant SaaS Architecture
+````markdown
+═══════════════════════════════════════════════════════════
+ARCHITECTURE PATTERN: MULTI-TENANT SAAS
+═══════════════════════════════════════════════════════════
+
+SYSTEM: B2B Project Management SaaS (competitor to Asana)
+
+REQUIREMENTS:
+- Scale: 10,000 companies, 100,000 users, 1M tasks/day
+- Performance: <300ms page load, <100ms API response
+- Multi-tenancy: Complete data isolation between companies
+- Real-time: Live updates when tasks change
+
+ARCHITECTURE DECISION:
+
+**1. MONOLITH (for MVP, evolve to microservices later)**
+- Why: Team of 3 developers, 6-month timeline
+- Trade-off: Easier to build initially, harder to scale later
+
+**2. DATABASE: Single PostgreSQL with tenant isolation**
+- Row-level security (companyId on all tables)
+- Why: Simpler than database-per-tenant
+- Trade-off: Careful query design needed (always filter by companyId)
+
+**3. REAL-TIME: Server-Sent Events (SSE)**
+- Why: Simpler than WebSockets, works with serverless
+- Trade-off: One-way only (server → client)
+
+**TECH STACK:**
+- Frontend: Next.js 14, React, TailwindCSS
+- Backend: Next.js API routes, Prisma, PostgreSQL
+- Real-time: SSE (via API routes)
+- Deployment: Vercel + Supabase
+- File storage: AWS S3
+
+**SCALABILITY PLAN:**
+- Phase 1 (0-1K companies): Monolith on Vercel
+- Phase 2 (1K-10K): Add Redis caching, CDN
+- Phase 3 (10K+): Split into microservices (task service, user service)
+═══════════════════════════════════════════════════════════
+````
+
+---
+
+## 🔄 PATTERN #9: MIGRATION PATTERN
+
+### When to Use
+
+**Upgrading libraries, frameworks, or migrating between technologies**.
+
+**Examples:**
+- "Migrate from Next.js Pages Router to App Router"
+- "Upgrade from NextAuth v4 to v5"
+- "Migrate from JavaScript to TypeScript"
+- "Migrate from REST to GraphQL"
+
+**Success Rate:** 75-85% (depends on migration complexity)
+
+---
+
+### Pattern Template
+````markdown
+═══════════════════════════════════════════════════════════
+MIGRATION PATTERN TEMPLATE
+═══════════════════════════════════════════════════════════
+
+PERSONA: You are a senior migration specialist with [YEARS] years of experience 
+upgrading large codebases. You've migrated systems with millions of lines of code 
+without downtime. You understand incremental migration strategies and rollback plans.
+
+CONTEXT:
+[Standard 5-layer context]
+
+MIGRATION:
+
+FROM: [Current technology, version]
+TO: [Target technology, version]
+
+REASON FOR MIGRATION:
+- [Why migrate? Performance, features, support?]
+
+MIGRATION SCOPE:
+- Files affected: [Approximate count]
+- Breaking changes: [List major breaking changes]
+- Timeline: [How long for migration]
+
+TASK: Migrate from [OLD] to [NEW] while maintaining zero downtime and ensuring 
+all existing functionality continues to work.
+
+MIGRATION STRATEGY:
+
+APPROACH:
+- [ ] Big Bang (migrate everything at once)
+- [ ] Incremental (migrate module by module)
+- [ ] Strangler Fig (run old + new side-by-side)
+
+PHASES:
+1. Preparation (setup new system)
+2. Migration (move code)
+3. Testing (verify functionality)
+4. Cutover (switch to new system)
+5. Cleanup (remove old code)
+
+ROLLBACK PLAN:
+- How to revert if migration fails
+- Criteria for rollback (error rate threshold)
+
+META-INSTRUCTIONS:
+- Migrate incrementally (small chunks, verify each)
+- Keep old and new working simultaneously (feature flags)
+- Test thoroughly before cutover
+- Document breaking changes clearly
+- Plan rollback strategy BEFORE starting
+
+OUTPUT FORMAT:
+
+DELIVERABLES:
+
+1. MIGRATION PLAN
+   - Phase-by-phase steps
+   - Timeline estimate
+   - Risk assessment
+
+2. CODE CHANGES
+   - Automated scripts (codemods if possible)
+   - Manual changes checklist
+
+3. TESTING PLAN
+   - Regression tests
+   - Performance benchmarks
+   - User acceptance testing
+
+4. ROLLBACK PROCEDURE
+   - How to revert
+   - Data backup strategy
+
+5. DOCUMENTATION
+   - Breaking changes guide
+   - Migration notes for team
+
+VALIDATION CHECKLIST:
+□ Migration plan documented
+□ All breaking changes identified
+□ Tests pass (regression suite)
+□ Performance unchanged (or improved)
+□ Rollback procedure tested
+□ Zero downtime achieved
+□ Team trained on new system
+═══════════════════════════════════════════════════════════
+````
+
+---
+
+### Real Example: Next.js Pages to App Router Migration
+````markdown
+═══════════════════════════════════════════════════════════
+MIGRATION PATTERN: PAGES → APP ROUTER
+═══════════════════════════════════════════════════════════
+
+MIGRATION:
+FROM: Next.js 13 (Pages Router)
+TO: Next.js 14 (App Router)
+
+REASON:
+- Better performance (React Server Components)
+- Improved data fetching
+- Better TypeScript support
+- Future-proof (Pages Router deprecated)
+
+SCOPE:
+- 25 pages (pages/*.tsx)
+- 10 API routes (pages/api/*.ts)
+- 15 components (components/*.tsx)
+
+STRATEGY: Incremental (migrate one route at a time)
+
+MIGRATION PLAN:
+
+**Phase 1: Preparation (Week 1)**
+1. Create /app directory
+2. Add app/layout.tsx (root layout)
+3. Move global styles
+4. Setup TypeScript for App Router
+
+**Phase 2: Migrate Routes (Week 2-3)**
+Route-by-route migration:
+1. /login (pages/login.tsx → app/login/page.tsx)
+2. /dashboard (pages/dashboard.tsx → app/dashboard/page.tsx)
+3. /tasks (pages/tasks/*.tsx → app/tasks/page.tsx)
+
+**Phase 3: Migrate API Routes (Week 4)**
+1. pages/api/tasks → app/api/tasks/route.ts
+2. Update to new API route format
+
+**Phase 4: Cleanup (Week 5)**
+1. Remove /pages directory
+2. Update documentation
+
+**ROLLBACK:** Keep /pages directory until migration 100% complete
+
+BREAKING CHANGES:
+1. `getServerSideProps` → `async` Server Components
+2. `useRouter()` (next/router) → `useRouter()` (next/navigation)
+3. API routes format changed
+
+EXAMPLE MIGRATION:
+```typescript
+// BEFORE (Pages Router)
+// pages/tasks/[id].tsx
+import { useRouter } from 'next/router'
+
+export async function getServerSideProps({ params }) {
+  const task = await prisma.task.findUnique({
+    where: { id: params.id }
+  })
+  
+  return { props: { task } }
+}
+
+export default function TaskPage({ task }) {
+  const router = useRouter()
+  
+  return <div>{task.title}</div>
+}
+
+// AFTER (App Router)
+// app/tasks/[id]/page.tsx
+import { prisma } from '@/lib/prisma'
+
+export default async function TaskPage({
+  params
+}: {
+  params: { id: string }
+}) {
+  const task = await prisma.task.findUnique({
+    where: { id: params.id }
+  })
+  
+  return <div>{task.title}</div>
+}
+```
+
+VALIDATION:
+□ All routes migrated
+□ All tests pass
+□ Performance improved (React Server Components)
+□ No runtime errors
+□ Rollback plan tested
+═══════════════════════════════════════════════════════════
+````
+
+---
