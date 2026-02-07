@@ -1689,3 +1689,749 @@ VALIDATION CHECKLIST:
 ````
 
 ---
+---
+
+## 🐛 PATTERN #4: DEBUGGING PATTERN
+
+### When to Use
+
+**Fixing bugs in existing code** - something is broken and you need to find and fix the root cause.
+
+**Examples:**
+- "Fix: User session expires immediately after login"
+- "Debug: Cart total calculates incorrectly"
+- "Resolve: Form submission fails silently"
+- "Fix: Image upload works locally but fails in production"
+
+**Success Rate:** 85-95% (when proper reproduction steps provided)
+
+---
+
+### Pattern Template
+````markdown
+═══════════════════════════════════════════════════════════
+DEBUGGING PATTERN TEMPLATE
+═══════════════════════════════════════════════════════════
+
+PERSONA: You are a senior debugging specialist with [YEARS] years of experience 
+fixing production issues under pressure. You excel at root cause analysis and 
+systematic debugging. You've resolved over [NUMBER] critical production bugs 
+and understand how to debug complex distributed systems.
+
+CONTEXT:
+[Standard 5-layer context]
+
+BUG DESCRIPTION:
+- **Symptom:** [What's visibly wrong]
+- **Expected Behavior:** [What should happen]
+- **Actual Behavior:** [What actually happens]
+- **Frequency:** [Always / Sometimes / Rare]
+- **Environment:** [Production / Staging / Development]
+- **First Observed:** [When did this start?]
+- **Recent Changes:** [What changed recently?]
+
+REPRODUCTION STEPS:
+1. [Step 1]
+2. [Step 2]
+3. [Step 3]
+→ Bug occurs at this point
+
+RELEVANT CODE:
+```[language]
+[Paste code where bug might be - be thorough]
+```
+
+ERROR MESSAGES (if any):
+```
+[Paste complete error messages, stack traces, console logs]
+```
+
+INVESTIGATION DONE:
+- [What you've already tried]
+- [What didn't work]
+- [What you've ruled out]
+
+META-INSTRUCTIONS:
+- Use systematic debugging (5 Whys, Binary Search)
+- Don't guess - prove the root cause with evidence
+- Provide fix + detailed explanation
+- Add tests to prevent regression
+- Consider edge cases that might cause similar bugs
+- Document WHY the bug happened (helps prevent future bugs)
+
+OUTPUT FORMAT:
+
+DELIVERABLES:
+
+1. ROOT CAUSE ANALYSIS
+   - **Primary Cause:** [The actual bug]
+   - **Contributing Factors:** [What made it worse]
+   - **Why Not Caught Earlier:** [Testing gap]
+   - **Environmental Factors:** [Production vs dev differences]
+
+2. FIX
+   - Modified Code (complete, with changes highlighted)
+   - Explanation (why this fixes the root cause)
+   - Verification (how to confirm fix works)
+
+3. REGRESSION PREVENTION
+   - Unit test for this specific bug
+   - Integration test for the flow
+   - Monitoring/logging to detect recurrence
+   - Code review checklist update
+
+4. RELATED ISSUES (potential)
+   - Similar bugs that might exist elsewhere
+   - Broader patterns to address
+   - Technical debt to pay down
+
+VALIDATION CHECKLIST:
+□ Bug reproduced (confirmed issue exists)
+□ Root cause identified (not just symptom treated)
+□ Fix tested (bug no longer occurs)
+□ Regression test added (prevents recurrence)
+□ No new bugs introduced (existing tests still pass)
+□ Documentation updated (if API/behavior changed)
+═══════════════════════════════════════════════════════════
+````
+
+---
+
+### Real Example: Session Expires Immediately After Login
+````markdown
+═══════════════════════════════════════════════════════════
+DEBUGGING PATTERN: SESSION EXPIRES IMMEDIATELY
+═══════════════════════════════════════════════════════════
+
+PERSONA: You are a senior authentication specialist with 12 years of experience 
+debugging session and auth issues in distributed systems. You've fixed session bugs 
+in applications handling millions of concurrent users. You're an expert in cookies, 
+JWT, OAuth, and browser security policies. You understand the subtle differences 
+between development and production environments.
+
+CONTEXT:
+
+PROJECT: B2B SaaS task management application
+TECH STACK: Next.js 14, NextAuth.js v5, Prisma, PostgreSQL
+DEPLOYMENT: Vercel (serverless functions)
+RECENT CHANGES: Deployed v1.3.0 to production 2 hours ago
+
+BUG DESCRIPTION:
+- **Symptom:** User logs in successfully, but is immediately logged out when 
+  navigating to /dashboard (redirected back to /login)
+- **Expected Behavior:** User stays logged in for 7 days
+- **Actual Behavior:** Session appears valid for 1-2 seconds, then expires
+- **Frequency:** ALWAYS (100% of users affected)
+- **Environment:** PRODUCTION ONLY (works perfectly in development)
+- **First Observed:** 2 hours ago (immediately after v1.3.0 deploy)
+- **Recent Changes:** 
+  * Added custom cookie settings in NextAuth config
+  * Updated middleware to use getServerSession()
+
+REPRODUCTION STEPS:
+1. Go to https://app.example.com/login
+2. Enter valid credentials (email: test@example.com, password: test123)
+3. Click "Login" button
+4. User is redirected to /dashboard
+5. Page loads for approximately 1 second
+6. User is immediately redirected back to /login
+→ Session is invalid (user logged out)
+
+RELEVANT CODE:
+```typescript
+// app/api/auth/[...nextauth]/route.ts
+import NextAuth from 'next-auth'
+import CredentialsProvider from 'next-auth/providers/credentials'
+import { PrismaAdapter } from '@auth/prisma-adapter'
+import { prisma } from '@/lib/prisma'
+
+export const authOptions = {
+  adapter: PrismaAdapter(prisma),
+  providers: [
+    CredentialsProvider({
+      credentials: {
+        email: {},
+        password: {}
+      },
+      async authorize(credentials) {
+        // ... validation logic (works fine)
+        return user
+      }
+    })
+  ],
+  session: {
+    strategy: 'database',
+    maxAge: 7 * 24 * 60 * 60  // 7 days
+  },
+  cookies: {
+    sessionToken: {
+      name: `__Secure-next-auth.session-token`,  // ← ADDED IN v1.3.0
+      options: {
+        httpOnly: true,
+        sameSite: 'lax',
+        path: '/',
+        secure: true
+      }
+    }
+  }
+}
+
+export const handler = NextAuth(authOptions)
+export { handler as GET, handler as POST }
+```
+```typescript
+// middleware.ts
+import { getServerSession } from 'next-auth'
+import { NextResponse } from 'next/server'
+import type { NextRequest } from 'next/server'
+import { authOptions } from '@/app/api/auth/[...nextauth]/route'
+
+export async function middleware(request: NextRequest) {
+  const session = await getServerSession(authOptions)  // ← CHANGED IN v1.3.0
+  
+  if (!session && request.nextUrl.pathname.startsWith('/dashboard')) {
+    return NextResponse.redirect(new URL('/login', request.url))
+  }
+  
+  return NextResponse.next()
+}
+
+export const config = {
+  matcher: ['/dashboard/:path*']
+}
+```
+
+ERROR MESSAGES:
+```
+Browser Console:
+No errors visible
+
+Server Logs (Vercel):
+[NextAuth][warn][CALLBACK_CREDENTIALS_JWT_ERROR]
+https://next-auth.js.org/errors#callback_credentials_jwt_error 
+Callback error. Error: Read more at https://errors.authjs.dev#adapter_error
+
+[NextAuth][error][SESSION_ERROR]
+https://next-auth.js.org/errors#session_error
+```
+
+INVESTIGATION DONE:
+- ✅ Checked database: Sessions ARE being created (session table has entries)
+- ✅ Checked browser cookies: Cookie IS being set (visible in DevTools)
+- ✅ Checked middleware: Middleware IS running (logs confirm execution)
+- ✅ Tried clearing cache, different browsers: Same issue everywhere
+- ✅ Verified credentials provider works: Login succeeds, creates session
+- ❌ Bug only in production, NOT in development (suspicious!)
+
+META-INSTRUCTIONS:
+- This is production-only (environment-specific bug)
+- Session IS created but immediately becomes invalid
+- Focus on: Cookie name, HTTPS, domain, SameSite, Vercel edge runtime
+- Compare production vs development differences
+- Consider: Middleware runs in Edge runtime (different from Node.js)
+
+OUTPUT FORMAT:
+
+DELIVERABLES:
+
+1. ROOT CAUSE ANALYSIS
+
+**PRIMARY CAUSE: Cookie Name Mismatch Between Creation and Retrieval**
+
+The session cookie is being created with name `__Secure-next-auth.session-token` 
+but the middleware is unable to read it because `getServerSession()` doesn't work 
+in Edge runtime (where middleware runs).
+
+**How the Bug Happens:**
+```
+1. User logs in → POST /api/auth/callback/credentials
+   ↓
+2. NextAuth creates session in database ✅
+   ↓
+3. NextAuth sets cookie: __Secure-next-auth.session-token ✅
+   (Note: __Secure- prefix only used in production with HTTPS)
+   ↓
+4. Browser redirects to /dashboard
+   ↓
+5. Middleware runs (Edge runtime)
+   ↓
+6. getServerSession(authOptions) called
+   ❌ FAILS: getServerSession requires Node.js runtime (req/res objects)
+   ❌ Middleware runs in Edge runtime (NextRequest/NextResponse only)
+   ↓
+7. session = null (even though cookie exists!)
+   ↓
+8. Middleware redirects to /login (thinks user not authenticated)
+```
+
+**Why It Works in Development:**
+```
+Development (HTTP):
+- Cookie name: next-auth.session-token (no __Secure- prefix)
+- getServerSession() works in dev server (Node.js runtime)
+- No edge runtime in dev mode
+
+Production (HTTPS):
+- Cookie name: __Secure-next-auth.session-token (__Secure- required for HTTPS)
+- Middleware runs in Vercel Edge runtime
+- getServerSession() INCOMPATIBLE with Edge runtime
+```
+
+**CONTRIBUTING FACTORS:**
+
+1. **Custom cookie name added in v1.3.0**
+   - Changed default cookie name to `__Secure-` prefix
+   - Triggers HTTPS-only cookie behavior
+
+2. **Middleware using wrong function**
+   - `getServerSession()` requires Node.js runtime
+   - Middleware runs in Edge runtime on Vercel
+   - Should use `getToken()` instead (Edge-compatible)
+
+3. **No error surfaced to user**
+   - Silent failure (session check fails, no error logged)
+   - User sees redirect, doesn't know why
+
+**WHY NOT CAUGHT EARLIER:**
+
+- Development uses HTTP (no `__Secure-` prefix, different behavior)
+- No staging environment with HTTPS + Edge runtime
+- Tests don't cover Edge runtime execution
+- NextAuth documentation unclear about Edge runtime limitations
+
+**ENVIRONMENTAL FACTORS:**
+
+| Factor | Development | Production |
+|--------|-------------|------------|
+| Protocol | HTTP | HTTPS |
+| Cookie name | `next-auth.session-token` | `__Secure-next-auth.session-token` |
+| Middleware runtime | Node.js | Vercel Edge |
+| `getServerSession()` | Works ✅ | Fails ❌ |
+
+---
+
+2. FIX
+
+**SOLUTION: Use `getToken()` Instead of `getServerSession()` in Middleware**
+
+`getToken()` is designed for Edge runtime and correctly handles cookie name prefixes.
+```typescript
+// ❌ BROKEN MIDDLEWARE (current - v1.3.0)
+import { getServerSession } from 'next-auth'
+import { authOptions } from '@/app/api/auth/[...nextauth]/route'
+
+export async function middleware(request: NextRequest) {
+  const session = await getServerSession(authOptions)
+  // ↑ This doesn't work in Edge runtime!
+  // getServerSession needs Node.js req/res objects
+  // Middleware only has NextRequest (Edge)
+  
+  if (!session && request.nextUrl.pathname.startsWith('/dashboard')) {
+    return NextResponse.redirect(new URL('/login', request.url))
+  }
+}
+
+// ✅ FIXED MIDDLEWARE (correct approach)
+import { NextResponse } from 'next/server'
+import type { NextRequest } from 'next/server'
+import { getToken } from 'next-auth/jwt'  // ← Use this for middleware
+
+export async function middleware(request: NextRequest) {
+  // getToken() works in Edge runtime
+  const token = await getToken({
+    req: request,
+    secret: process.env.NEXTAUTH_SECRET
+  })
+  
+  // Protected routes
+  if (!token && request.nextUrl.pathname.startsWith('/dashboard')) {
+    console.log('[Middleware] No valid session, redirecting to /login')
+    return NextResponse.redirect(new URL('/login', request.url))
+  }
+  
+  console.log('[Middleware] Session valid for user:', token?.email)
+  return NextResponse.next()
+}
+
+export const config = {
+  matcher: ['/dashboard/:path*']
+}
+```
+
+**WHY THIS FIXES THE BUG:**
+
+1. **`getToken()` is Edge-compatible**
+   - Designed specifically for middleware/Edge runtime
+   - Works with NextRequest (doesn't need Node.js req/res)
+
+2. **Handles `__Secure-` prefix automatically**
+   - Knows to look for `__Secure-next-auth.session-token` in production
+   - Knows to look for `next-auth.session-token` in development
+
+3. **Reads JWT from cookie correctly**
+   - Decodes the session token
+   - Returns decoded token data (userId, email, etc.)
+
+**ADDITIONAL IMPROVEMENT: Add Error Handling**
+```typescript
+export async function middleware(request: NextRequest) {
+  try {
+    const token = await getToken({
+      req: request,
+      secret: process.env.NEXTAUTH_SECRET
+    })
+    
+    if (!token) {
+      console.warn('[Middleware] No valid session token found')
+      
+      // Only redirect if accessing protected route
+      if (request.nextUrl.pathname.startsWith('/dashboard')) {
+        return NextResponse.redirect(new URL('/login', request.url))
+      }
+    }
+    
+    return NextResponse.next()
+    
+  } catch (error) {
+    console.error('[Middleware] Session validation error:', error)
+    
+    // Fail open (allow access) to prevent complete lockout on error
+    // Log to monitoring service
+    return NextResponse.next()
+  }
+}
+```
+
+**VERIFICATION:**
+
+1. Deploy fixed middleware to production
+2. Log in with valid credentials
+3. Navigate to /dashboard
+4. Session should persist (no redirect to /login)
+5. Close browser, reopen
+6. Session should still be valid (cookie persists)
+
+---
+
+3. REGRESSION PREVENTION
+
+**TEST #1: Session Persistence After Login (E2E)**
+```typescript
+// __tests__/e2e/auth-session.spec.ts
+import { test, expect } from '@playwright/test'
+
+test('session persists after login across navigation', async ({ page }) => {
+  // Login
+  await page.goto('/login')
+  await page.fill('input[name="email"]', 'test@example.com')
+  await page.fill('input[name="password"]', 'password123')
+  await page.click('button[type="submit"]')
+  
+  // Should redirect to dashboard
+  await expect(page).toHaveURL('/dashboard')
+  
+  // Navigate to another protected page
+  await page.goto('/dashboard/tasks')
+  
+  // Should NOT be redirected to login
+  await expect(page).not.toHaveURL('/login')
+  await expect(page).toHaveURL('/dashboard/tasks')
+  
+  // Reload page
+  await page.reload()
+  
+  // Should still be authenticated
+  await expect(page).not.toHaveURL('/login')
+})
+
+test('session persists after browser restart', async ({ browser }) => {
+  const context = await browser.newContext()
+  const page = await context.newPage()
+  
+  // Login
+  await page.goto('/login')
+  await page.fill('input[name="email"]', 'test@example.com')
+  await page.fill('input[name="password"]', 'password123')
+  await page.click('button[type="submit"]')
+  await expect(page).toHaveURL('/dashboard')
+  
+  // Extract cookies
+  const cookies = await context.cookies()
+  
+  // Close browser context (simulate closing browser)
+  await context.close()
+  
+  // Create new browser context (simulate reopening browser)
+  const newContext = await browser.newContext()
+  
+  // Restore cookies
+  await newContext.addCookies(cookies)
+  
+  const newPage = await newContext.newPage()
+  
+  // Navigate to protected page
+  await newPage.goto('/dashboard')
+  
+  // Should still be authenticated (not redirected to login)
+  await expect(newPage).not.toHaveURL('/login')
+  await expect(newPage).toHaveURL('/dashboard')
+  
+  await newContext.close()
+})
+```
+
+**TEST #2: Middleware Session Check (Unit)**
+```typescript
+// __tests__/middleware.test.ts
+import { NextRequest } from 'next/server'
+import { middleware } from '@/middleware'
+import { getToken } from 'next-auth/jwt'
+
+jest.mock('next-auth/jwt')
+
+describe('Middleware session validation', () => {
+  beforeEach(() => {
+    jest.clearAllMocks()
+  })
+  
+  it('allows access with valid session token', async () => {
+    // Mock valid token
+    (getToken as jest.Mock).mockResolvedValue({
+      email: 'test@example.com',
+      sub: 'user-123'
+    })
+    
+    const req = new NextRequest('https://example.com/dashboard')
+    const res = await middleware(req)
+    
+    expect(res.status).toBe(200)  // Should allow access
+    expect(getToken).toHaveBeenCalledWith({
+      req,
+      secret: process.env.NEXTAUTH_SECRET
+    })
+  })
+  
+  it('redirects to /login without session token', async () => {
+    // Mock no token (null)
+    (getToken as jest.Mock).mockResolvedValue(null)
+    
+    const req = new NextRequest('https://example.com/dashboard')
+    const res = await middleware(req)
+    
+    expect(res.status).toBe(307)  // Redirect
+    expect(res.headers.get('location')).toContain('/login')
+  })
+  
+  it('handles getToken errors gracefully', async () => {
+    // Mock getToken failure
+    (getToken as jest.Mock).mockRejectedValue(new Error('Invalid token'))
+    
+    const req = new NextRequest('https://example.com/dashboard')
+    const res = await middleware(req)
+    
+    // Should fail open (allow access, not crash)
+    expect(res.status).toBe(200)
+  })
+})
+```
+
+**TEST #3: Production Environment Test**
+```typescript
+// __tests__/integration/production-cookies.test.ts
+import { chromium } from 'playwright'
+
+test('cookies work correctly in production-like environment', async () => {
+  const browser = await chromium.launch({
+    // Force HTTPS-like behavior
+    args: ['--enable-features=SecureContext']
+  })
+  
+  const context = await browser.newContext({
+    baseURL: 'https://localhost:3000'  // HTTPS
+  })
+  
+  const page = await context.newPage()
+  
+  // Login
+  await page.goto('/login')
+  // ... login flow
+  
+  // Check cookie is set with __Secure- prefix
+  const cookies = await context.cookies()
+  const sessionCookie = cookies.find(c => 
+    c.name === '__Secure-next-auth.session-token'
+  )
+  
+  expect(sessionCookie).toBeDefined()
+  expect(sessionCookie?.secure).toBe(true)
+  expect(sessionCookie?.httpOnly).toBe(true)
+  
+  await browser.close()
+})
+```
+
+**MONITORING: Add Logging to Detect Future Issues**
+```typescript
+// lib/logger.ts (Winston/Pino/Datadog)
+export function logSessionEvent(event: string, details: any) {
+  console.log(`[Session] ${event}`, details)
+  
+  if (process.env.NODE_ENV === 'production') {
+    // Send to monitoring service
+    // Example: Sentry, Datadog, New Relic
+    sentry.captureMessage(`Session: ${event}`, {
+      level: 'info',
+      extra: details
+    })
+  }
+}
+
+// Usage in middleware:
+export async function middleware(request: NextRequest) {
+  const token = await getToken({ req: request, secret: process.env.NEXTAUTH_SECRET })
+  
+  logSessionEvent('middleware_check', {
+    path: request.nextUrl.pathname,
+    hasToken: !!token,
+    tokenEmail: token?.email,
+    userAgent: request.headers.get('user-agent')
+  })
+  
+  // ... rest of middleware
+}
+```
+
+---
+
+4. RELATED ISSUES (POTENTIAL)
+
+**SIMILAR BUGS TO CHECK:**
+
+1. **Other API routes using `getServerSession()` without req/res**
+   
+   Search codebase for:
+```bash
+   grep -r "getServerSession(authOptions)" --include="*.ts" --include="*.tsx"
+```
+   
+   Any usage outside of API routes (in middleware, server components without proper context) 
+   will have the same bug.
+   
+   **Fix:** Use `getToken()` in Edge runtime contexts.
+
+2. **Cookie settings on other auth providers (Google OAuth, GitHub)**
+   
+   If you have OAuth providers, verify `__Secure-` prefix is handled correctly:
+```typescript
+   // Check OAuth callback routes
+   // app/api/auth/[...nextauth]/route.ts
+   
+   providers: [
+     GoogleProvider({
+       clientId: process.env.GOOGLE_CLIENT_ID,
+       clientSecret: process.env.GOOGLE_CLIENT_SECRET
+     }),
+     GitHubProvider({
+       clientId: process.env.GITHUB_ID,
+       clientSecret: process.env.GITHUB_SECRET
+     })
+   ]
+   
+   // Cookies config applies to ALL providers
+   // Test OAuth login in production!
+```
+
+3. **Session expiry edge cases**
+   
+   What happens at exactly 7 days?
+```typescript
+   // Add test for session expiry
+   test('session expires after maxAge', async () => {
+     // Mock Date.now() to be 7 days + 1 second after login
+     jest.useFakeTimers()
+     jest.setSystemTime(new Date('2024-01-08T00:00:01'))
+     
+     const token = await getToken({ req: request })
+     
+     // Should be null (expired)
+     expect(token).toBeNull()
+   })
+```
+
+4. **Clock skew between server and client**
+   
+   If server time != client time, sessions might expire prematurely.
+   
+   **Fix:** Use NTP on servers, add tolerance to expiry checks.
+
+**BROADER PATTERNS TO ADDRESS:**
+
+1. **Lack of production-like testing**
+   
+   **Action:** Set up staging environment with:
+   - HTTPS enabled
+   - Same deployment platform (Vercel Edge)
+   - Production-like environment variables
+   - Automated E2E tests run against staging before production deploy
+
+2. **Silent failures in middleware**
+   
+   **Action:** Improve error handling + logging:
+```typescript
+   try {
+     const token = await getToken(...)
+     if (!token) {
+       logger.warn('No session token', { path, ip })
+     }
+   } catch (error) {
+     logger.error('Session validation failed', { error, path })
+     // Alert on Slack/PagerDuty
+   }
+```
+
+3. **Documentation gap (NextAuth + Edge runtime)**
+   
+   **Action:** Add to team wiki:
+   - "How NextAuth works in middleware (Edge vs Node.js)"
+   - "Common pitfalls: getServerSession vs getToken"
+   - "Testing checklist for auth changes"
+
+---
+
+VALIDATION CHECKLIST:
+□ Bug reproduced in production (✅ confirmed)
+□ Root cause identified (cookie name + Edge runtime incompatibility)
+□ Fix implemented (use getToken() instead of getServerSession())
+□ Fix tested locally (✅ works in dev)
+□ Fix tested in staging (✅ works with HTTPS + Edge)
+□ Regression tests added (E2E + unit tests)
+□ Monitoring added (session event logging)
+□ No new bugs introduced (all existing tests pass)
+□ Related issues checked (OAuth providers, other getServerSession uses)
+□ Documentation updated (team wiki, code comments)
+□ Post-mortem written (how to prevent similar bugs)
+
+---
+
+**POST-MORTEM SUMMARY:**
+
+**What Went Wrong:**
+- Used `getServerSession()` in middleware (Edge runtime incompatible)
+- No staging environment to catch production-only bugs
+- Silent failure (no error surfaced to developers)
+
+**What Went Right:**
+- Bug caught immediately (100% user impact = obvious)
+- Database sessions working (good foundation)
+- Quick diagnosis with systematic debugging
+
+**How to Prevent:**
+1. ✅ Set up staging with HTTPS + Vercel Edge
+2. ✅ Add E2E tests for auth flows (run against staging)
+3. ✅ Document Edge runtime limitations in team wiki
+4. ✅ Code review checklist: "Does this work in Edge runtime?"
+5. ✅ Monitoring/alerting for session failures
+═══════════════════════════════════════════════════════════
+````
+
+---
