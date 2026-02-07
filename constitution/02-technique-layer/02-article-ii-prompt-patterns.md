@@ -583,3 +583,492 @@ EXPLANATION REQUIRED:
 ````
 
 ---
+---
+
+## ⚡ PATTERN #2: DELTA PATTERN
+
+### When to Use
+
+**Making minimal changes to existing code** - surgical modifications, not rewrites.
+
+**Examples:**
+- "Add rate limiting to this API route"
+- "Add loading state to this button"
+- "Change validation rule for password"
+- "Add new field to existing form"
+
+**Success Rate:** 90-95% (higher than Scaffolding because less can go wrong)
+
+---
+
+### Pattern Template
+````markdown
+═══════════════════════════════════════════════════════════
+DELTA PATTERN TEMPLATE
+═══════════════════════════════════════════════════════════
+
+PERSONA: You are a senior engineer with expertise in [AREA]. You excel at making 
+surgical code changes without breaking existing functionality. You've refactored 
+codebases with millions of lines and never introduced regressions.
+
+CONTEXT:
+[Standard 5-layer context]
+
+EXISTING CODE:
+```[language]
+[Paste complete existing code - be thorough]
+```
+
+TASK: Modify the existing code to [SPECIFIC CHANGE] while preserving all current 
+functionality and maintaining code style.
+
+CHANGE REQUIREMENTS:
+1. [Specific change #1]
+2. [Specific change #2]
+3. [Specific change #3]
+
+CONSTRAINTS:
+- **MINIMAL CHANGES ONLY** (do NOT rewrite unless absolutely necessary)
+- **PRESERVE EXISTING BEHAVIOR** (all current features must still work)
+- **MAINTAIN CODE STYLE** (match existing patterns, naming conventions)
+- **NO BREAKING CHANGES** (public API stays same)
+- **BACKWARD COMPATIBLE** (if applicable)
+
+SECURITY MANDATES:
+[Relevant commandments based on change type]
+
+META-INSTRUCTIONS:
+- Analyze existing code FIRST (understand current logic thoroughly)
+- Identify EXACT lines to change (be surgical)
+- Explain WHY each change is necessary
+- Flag potential side effects (what else might be affected)
+- Consider backward compatibility (migration path if needed)
+- Preserve comments and formatting
+
+OUTPUT FORMAT:
+
+DELIVERABLES:
+1. Modified Code (complete file with changes)
+
+2. Diff Summary (line-by-line explanation)
+```diff
+   - Old line (removed)
+   + New line (added)
+```
+   Why: [Explanation]
+
+3. Migration Notes (if any breaking changes)
+   - What changed
+   - How to update calling code
+   - Deprecation timeline
+
+4. Testing Instructions
+   - How to verify change works
+   - Regression test checklist
+
+VALIDATION CHECKLIST:
+□ Requested change implemented
+□ Existing functionality preserved (no regressions)
+□ All existing tests still pass
+□ New tests added (for new behavior)
+□ Code style maintained
+□ No breaking changes (or clearly documented)
+═══════════════════════════════════════════════════════════
+````
+
+---
+
+### Real Example: Add Rate Limiting
+````markdown
+═══════════════════════════════════════════════════════════
+DELTA PATTERN: ADD RATE LIMITING TO API ROUTE
+═══════════════════════════════════════════════════════════
+
+PERSONA: You are a senior backend engineer with 12 years of experience securing 
+production APIs. You've added rate limiting to systems handling millions of requests 
+daily without ever causing downtime. You specialize in making surgical changes that 
+preserve existing behavior while adding critical security layers.
+
+CONTEXT:
+
+PROJECT: B2B SaaS invoicing platform
+TECH STACK: Next.js 14, Prisma, PostgreSQL, Upstash Redis
+DEPLOYMENT: Vercel (serverless functions)
+CURRENT: API routes work but no rate limiting (security gap)
+
+EXISTING CODE:
+```typescript
+// app/api/invoices/route.ts
+import { NextResponse } from 'next/server'
+import { getServerSession } from 'next-auth'
+import { prisma } from '@/lib/prisma'
+import { authOptions } from '@/lib/auth'
+import { z } from 'zod'
+
+const invoiceSchema = z.object({
+  customerId: z.string().cuid(),
+  amount: z.number().positive(),
+  dueDate: z.string().datetime()
+})
+
+export async function GET(request: Request) {
+  const session = await getServerSession(authOptions)
+  
+  if (!session) {
+    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+  }
+  
+  const invoices = await prisma.invoice.findMany({
+    where: {
+      companyId: session.user.companyId
+    }
+  })
+  
+  return NextResponse.json(invoices)
+}
+
+export async function POST(request: Request) {
+  const session = await getServerSession(authOptions)
+  
+  if (!session) {
+    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+  }
+  
+  const body = await request.json()
+  const result = invoiceSchema.safeParse(body)
+  
+  if (!result.success) {
+    return NextResponse.json(
+      { error: 'Validation failed', details: result.error.format() },
+      { status: 400 }
+    )
+  }
+  
+  const invoice = await prisma.invoice.create({
+    data: {
+      ...result.data,
+      companyId: session.user.companyId
+    }
+  })
+  
+  return NextResponse.json(invoice, { status: 201 })
+}
+```
+
+TASK: Add comprehensive rate limiting to both GET and POST endpoints using Upstash 
+Redis. Limit authenticated users to 100 requests per minute. Return 429 status with 
+Retry-After header when limit exceeded.
+
+CHANGE REQUIREMENTS:
+1. Import Upstash Ratelimit library
+2. Initialize rate limiter with Redis client
+3. Check rate limit BEFORE processing request (at top of each handler)
+4. Return 429 with Retry-After header if exceeded
+5. Use user ID as rate limit key (per-user limits)
+6. Handle Redis errors gracefully (fail open in development)
+
+CONSTRAINTS:
+- **MINIMAL CHANGES** (only add rate limiting, don't refactor)
+- **PRESERVE BEHAVIOR** (same responses, same status codes for existing flows)
+- **MAINTAIN STYLE** (match existing code structure, naming)
+- **NO BREAKING CHANGES** (API contract unchanged)
+- **GRACEFUL DEGRADATION** (work without Redis in development)
+
+SECURITY MANDATES:
+- Commandment V: Rate limiting enforced
+  * 100 requests/minute per authenticated user
+  * 429 status code with Retry-After header
+  * Per-user tracking (not global)
+  
+META-INSTRUCTIONS:
+- Add try-catch blocks around rate limiting (Redis might fail)
+- Log rate limit events for monitoring
+- Consider: Should GET and POST have different limits? (decision: same limit)
+- Explain: Why check rate limit BEFORE auth? (prevent auth bypass)
+
+OUTPUT FORMAT:
+
+DELIVERABLES:
+
+1. MODIFIED CODE
+```typescript
+// app/api/invoices/route.ts
+import { NextResponse } from 'next/server'
+import { getServerSession } from 'next-auth'
+import { prisma } from '@/lib/prisma'
+import { authOptions } from '@/lib/auth'
+import { z } from 'zod'
+import { Ratelimit } from '@upstash/ratelimit'  // ← NEW IMPORT
+import { Redis } from '@upstash/redis'          // ← NEW IMPORT
+
+const invoiceSchema = z.object({
+  customerId: z.string().cuid(),
+  amount: z.number().positive(),
+  dueDate: z.string().datetime()
+})
+
+// ← NEW: Initialize rate limiter
+const ratelimit = new Ratelimit({
+  redis: Redis.fromEnv(),
+  limiter: Ratelimit.slidingWindow(100, '1 m'),  // 100 requests per minute
+  analytics: true,
+  prefix: 'ratelimit:invoices'
+})
+
+export async function GET(request: Request) {
+  // ← NEW: Rate limit check FIRST (before auth)
+  const session = await getServerSession(authOptions)
+  
+  if (!session) {
+    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+  }
+  
+  // ← NEW: Rate limiting (after auth, using user ID)
+  try {
+    const { success, limit, remaining, reset } = await ratelimit.limit(session.user.id)
+    
+    if (!success) {
+      const retryAfter = Math.floor((reset - Date.now()) / 1000)
+      return NextResponse.json(
+        { 
+          error: 'Too many requests. Please try again later.',
+          retryAfter 
+        },
+        { 
+          status: 429,
+          headers: {
+            'Retry-After': String(retryAfter),
+            'X-RateLimit-Limit': String(limit),
+            'X-RateLimit-Remaining': String(remaining),
+            'X-RateLimit-Reset': String(reset)
+          }
+        }
+      )
+    }
+  } catch (error) {
+    // ← NEW: Graceful degradation (Redis failure)
+    console.error('Rate limit check failed:', error)
+    // Continue processing (fail open in case of Redis issues)
+  }
+  
+  const invoices = await prisma.invoice.findMany({
+    where: {
+      companyId: session.user.companyId
+    }
+  })
+  
+  return NextResponse.json(invoices)
+}
+
+export async function POST(request: Request) {
+  // ← NEW: Rate limit check
+  const session = await getServerSession(authOptions)
+  
+  if (!session) {
+    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+  }
+  
+  // ← NEW: Rate limiting (same as GET)
+  try {
+    const { success, limit, remaining, reset } = await ratelimit.limit(session.user.id)
+    
+    if (!success) {
+      const retryAfter = Math.floor((reset - Date.now()) / 1000)
+      return NextResponse.json(
+        { 
+          error: 'Too many requests. Please try again later.',
+          retryAfter 
+        },
+        { 
+          status: 429,
+          headers: {
+            'Retry-After': String(retryAfter),
+            'X-RateLimit-Limit': String(limit),
+            'X-RateLimit-Remaining': String(remaining),
+            'X-RateLimit-Reset': String(reset)
+          }
+        }
+      )
+    }
+  } catch (error) {
+    console.error('Rate limit check failed:', error)
+    // Continue processing (fail open)
+  }
+  
+  const body = await request.json()
+  const result = invoiceSchema.safeParse(body)
+  
+  if (!result.success) {
+    return NextResponse.json(
+      { error: 'Validation failed', details: result.error.format() },
+      { status: 400 }
+    )
+  }
+  
+  const invoice = await prisma.invoice.create({
+    data: {
+      ...result.data,
+      companyId: session.user.companyId
+    }
+  })
+  
+  return NextResponse.json(invoice, { status: 201 })
+}
+```
+
+2. DIFF SUMMARY
+```diff
++ import { Ratelimit } from '@upstash/ratelimit'
++ import { Redis } from '@upstash/redis'
+```
+**Why:** Import rate limiting libraries
+```diff
++ const ratelimit = new Ratelimit({
++   redis: Redis.fromEnv(),
++   limiter: Ratelimit.slidingWindow(100, '1 m'),
++   analytics: true,
++   prefix: 'ratelimit:invoices'
++ })
+```
+**Why:** Initialize rate limiter (100 req/min per user, sliding window algorithm)
+```diff
+  export async function GET(request: Request) {
+    const session = await getServerSession(authOptions)
+    
+    if (!session) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+    }
+    
++   try {
++     const { success, limit, remaining, reset } = await ratelimit.limit(session.user.id)
++     
++     if (!success) {
++       // Return 429 with headers
++     }
++   } catch (error) {
++     console.error('Rate limit check failed:', error)
++   }
+    
+    const invoices = await prisma.invoice.findMany({ ... })
+```
+**Why:** Add rate limit check AFTER auth (use authenticated user ID as key)
+
+**Same pattern repeated in POST handler.**
+
+**NOT CHANGED:**
+- All existing logic preserved
+- Response formats unchanged (except new 429 response)
+- Validation behavior unchanged
+- Database queries unchanged
+- Error handling for existing errors unchanged
+
+3. MIGRATION NOTES
+
+**No breaking changes** - this is purely additive.
+
+**New Dependencies:**
+```bash
+npm install @upstash/ratelimit @upstash/redis
+```
+
+**Environment Variables Required:**
+```bash
+# .env
+UPSTASH_REDIS_REST_URL=https://your-redis-url.upstash.io
+UPSTASH_REDIS_REST_TOKEN=your_token_here
+```
+
+**New Response (429):**
+```json
+{
+  "error": "Too many requests. Please try again later.",
+  "retryAfter": 42
+}
+```
+
+**Headers:**
+- `Retry-After`: Seconds until rate limit resets
+- `X-RateLimit-Limit`: Max requests allowed
+- `X-RateLimit-Remaining`: Requests remaining
+- `X-RateLimit-Reset`: Timestamp when limit resets
+
+4. TESTING INSTRUCTIONS
+
+**Manual Test:**
+```bash
+# 1. Make 100 requests quickly
+for i in {1..100}; do
+  curl http://localhost:3000/api/invoices \
+    -H "Cookie: session_token=your_token"
+done
+
+# 2. Make 101st request - should get 429
+curl -v http://localhost:3000/api/invoices \
+  -H "Cookie: session_token=your_token"
+
+# Expected: 429 status with Retry-After header
+```
+
+**Automated Test:**
+```typescript
+// __tests__/api/invoices-rate-limit.test.ts
+import { GET } from '@/app/api/invoices/route'
+
+describe('Rate limiting', () => {
+  it('allows 100 requests per minute', async () => {
+    // Make 100 requests
+    for (let i = 0; i < 100; i++) {
+      const response = await GET(mockRequest)
+      expect(response.status).toBe(200)
+    }
+  })
+  
+  it('returns 429 after 100 requests', async () => {
+    // Make 101 requests
+    for (let i = 0; i < 100; i++) {
+      await GET(mockRequest)
+    }
+    
+    const response = await GET(mockRequest)
+    expect(response.status).toBe(429)
+    
+    const data = await response.json()
+    expect(data.error).toContain('Too many requests')
+    expect(data.retryAfter).toBeGreaterThan(0)
+  })
+  
+  it('includes rate limit headers', async () => {
+    const response = await GET(mockRequest)
+    
+    expect(response.headers.get('X-RateLimit-Limit')).toBe('100')
+    expect(response.headers.get('X-RateLimit-Remaining')).toBeDefined()
+  })
+})
+```
+
+**Redis Failure Test:**
+```typescript
+it('fails open when Redis unavailable', async () => {
+  // Mock Redis failure
+  jest.spyOn(ratelimit, 'limit').mockRejectedValue(new Error('Redis down'))
+  
+  const response = await GET(mockRequest)
+  
+  // Should still return 200 (fail open, not closed)
+  expect(response.status).toBe(200)
+})
+```
+
+VALIDATION CHECKLIST:
+□ Rate limiting works (returns 429 after 100 requests)
+□ Retry-After header present in 429 responses
+□ Rate limit headers included (X-RateLimit-*)
+□ Existing functionality preserved (all tests pass)
+□ Redis errors handled gracefully (doesn't crash)
+□ Environment variables documented (.env.example)
+□ Per-user tracking (not global limit)
+□ Both GET and POST endpoints protected
+═══════════════════════════════════════════════════════════
+````
+
+---
