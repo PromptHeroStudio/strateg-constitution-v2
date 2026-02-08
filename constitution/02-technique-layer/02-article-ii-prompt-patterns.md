@@ -4844,3 +4844,827 @@ VALIDATION:
 ````
 
 ---
+---
+
+## ⚡ PATTERN #10: PERFORMANCE OPTIMIZATION PATTERN
+
+### When to Use
+
+**Improving application speed and efficiency** - making code run faster.
+
+**Examples:**
+- "Optimize this database query (currently 2s response time)"
+- "Reduce page load time from 3s to <500ms"
+- "Fix memory leak in React component"
+- "Optimize image loading (lazy loading, WebP)"
+
+**Success Rate:** 80-90% (when bottleneck is identified)
+
+---
+
+### Pattern Template
+````markdown
+═══════════════════════════════════════════════════════════
+PERFORMANCE OPTIMIZATION PATTERN TEMPLATE
+═══════════════════════════════════════════════════════════
+
+PERSONA: You are a senior performance engineer with [YEARS] years of experience 
+optimizing web applications. You've improved page load times by 80%+ for Fortune 500 
+companies. You understand profiling tools, browser performance APIs, and database 
+query optimization.
+
+CONTEXT:
+[Standard 5-layer context]
+
+PERFORMANCE ISSUE:
+
+CURRENT STATE:
+- Metric: [Page load time, API response, memory usage]
+- Current Value: [e.g., 3 seconds]
+- Target Value: [e.g., <500ms]
+
+BOTTLENECK (if known):
+- [ ] Database queries (N+1, missing indexes)
+- [ ] Large bundle size (JavaScript)
+- [ ] Unnecessary re-renders (React)
+- [ ] Unoptimized images
+- [ ] Network requests (too many, too slow)
+- [ ] Unknown (needs profiling)
+
+CODE TO OPTIMIZE:
+```[language]
+[Paste code with performance issue]
+```
+
+TASK: Optimize [METRIC] from [CURRENT] to [TARGET] by identifying and fixing 
+the performance bottleneck.
+
+OPTIMIZATION STRATEGY:
+
+1. MEASURE (before optimizing):
+   - Profile the code (Chrome DevTools, Lighthouse)
+   - Identify bottleneck (what's actually slow)
+   - Establish baseline (current metrics)
+
+2. OPTIMIZE:
+   - Target highest-impact issue first
+   - Make one change at a time
+   - Measure after each change
+
+3. VERIFY:
+   - Re-measure (did performance improve?)
+   - Ensure no regressions (functionality still works)
+
+CONSTRAINTS:
+- Don't sacrifice readability for micro-optimizations
+- Don't break existing functionality
+- Consider maintenance cost (is complexity worth it?)
+
+META-INSTRUCTIONS:
+- Start with profiling (don't guess)
+- Focus on user-perceived performance (not just metrics)
+- Consider trade-offs (complexity vs speed)
+- Document WHY optimization works
+- Measure before and after (prove improvement)
+
+OUTPUT FORMAT:
+
+DELIVERABLES:
+
+1. PERFORMANCE ANALYSIS
+   - Bottleneck identified (root cause)
+   - Baseline metrics (before optimization)
+
+2. OPTIMIZED CODE
+   - Changes made
+   - Explanation (why this improves performance)
+
+3. BENCHMARK RESULTS
+   - Before metrics
+   - After metrics
+   - Improvement percentage
+
+4. MONITORING
+   - How to track performance over time
+   - Alerts for regressions
+
+VALIDATION CHECKLIST:
+□ Bottleneck identified (profiled, not guessed)
+□ Baseline measured (before optimization)
+□ Optimization implemented
+□ Performance improved (measured after)
+□ No regressions (functionality intact)
+□ Monitoring configured (track over time)
+□ Documentation updated (why optimization works)
+═══════════════════════════════════════════════════════════
+````
+
+---
+
+### Real Example: Optimize Slow Database Query
+````markdown
+═══════════════════════════════════════════════════════════
+PERFORMANCE OPTIMIZATION: DATABASE QUERY
+═══════════════════════════════════════════════════════════
+
+PERSONA: You are a senior database performance engineer with 15 years of experience 
+optimizing PostgreSQL databases. You've optimized queries handling billions of rows 
+and understand indexes, query planning, and database architecture.
+
+CONTEXT:
+
+PROJECT: Task management SaaS
+DATABASE: PostgreSQL 14 (Supabase)
+CURRENT STATE: Task list page loads in 2.5 seconds (unacceptable)
+TARGET: <300ms page load
+
+PERFORMANCE ISSUE:
+
+CURRENT METRIC: API response time
+- Current: 2,500ms (p95)
+- Target: <100ms (p95)
+
+BOTTLENECK: Database query (identified via profiling)
+
+CODE TO OPTIMIZE:
+```typescript
+// app/api/tasks/route.ts (BEFORE)
+export async function GET(request: Request) {
+  const session = await getServerSession(authOptions)
+  
+  if (!session) {
+    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+  }
+  
+  // ❌ SLOW: N+1 query problem
+  const tasks = await prisma.task.findMany({
+    where: {
+      companyId: session.user.companyId,
+      deletedAt: null
+    },
+    orderBy: { createdAt: 'desc' }
+  })
+  
+  // ❌ For each task, fetch creator and assignee (N+1 queries!)
+  const tasksWithUsers = await Promise.all(
+    tasks.map(async (task) => {
+      const creator = await prisma.user.findUnique({
+        where: { id: task.creatorId }
+      })
+      
+      const assignee = task.assigneeId
+        ? await prisma.user.findUnique({ where: { id: task.assigneeId } })
+        : null
+      
+      return {
+        ...task,
+        creator,
+        assignee
+      }
+    })
+  )
+  
+  return NextResponse.json(tasksWithUsers)
+}
+```
+
+**PROFILING RESULTS:**
+```sql
+-- Query execution time analysis
+EXPLAIN ANALYZE SELECT * FROM "Task" WHERE "companyId" = 'company-123' AND "deletedAt" IS NULL;
+
+-- Result:
+Seq Scan on "Task"  (cost=0.00..1234.56 rows=1000 width=500) (actual time=0.012..245.678 rows=1000 loops=1)
+  Filter: (("companyId" = 'company-123') AND ("deletedAt" IS NULL))
+Planning Time: 0.123 ms
+Execution Time: 2456.789 ms  ← SLOW!
+
+-- Issues identified:
+1. No index on companyId (Sequential scan instead of index scan)
+2. No index on deletedAt
+3. N+1 queries (100 tasks = 200+ additional queries for users)
+```
+
+OPTIMIZATION STRATEGY:
+
+**Issue #1: Missing Indexes**
+**Issue #2: N+1 Query Problem**
+**Issue #3: Fetching Unnecessary Data**
+
+DELIVERABLES:
+
+1. PERFORMANCE ANALYSIS
+
+**Bottleneck Identified:**
+- Primary: N+1 query problem (100 tasks × 2 user queries = 200 queries)
+- Secondary: Missing database indexes (sequential scan)
+- Tertiary: Fetching all columns (unnecessary data transfer)
+
+**Baseline Metrics:**
+- Query count: 201 queries (1 for tasks + 200 for users)
+- Execution time: 2,500ms (p95)
+- Database load: High (200+ concurrent queries)
+
+2. OPTIMIZED CODE
+```typescript
+// app/api/tasks/route.ts (AFTER - OPTIMIZED)
+export async function GET(request: Request) {
+  const session = await getServerSession(authOptions)
+  
+  if (!session) {
+    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+  }
+  
+  // ✅ OPTIMIZED: Single query with includes (Prisma joins)
+  const tasks = await prisma.task.findMany({
+    where: {
+      companyId: session.user.companyId,
+      deletedAt: null
+    },
+    // ✅ Include related data in single query
+    include: {
+      creator: {
+        select: {
+          id: true,
+          name: true,
+          email: true
+          // ✅ Only fetch needed fields (not password, etc.)
+        }
+      },
+      assignee: {
+        select: {
+          id: true,
+          name: true,
+          email: true
+        }
+      }
+    },
+    orderBy: { createdAt: 'desc' },
+    // ✅ Pagination (don't fetch all tasks at once)
+    take: 50,
+    skip: 0
+  })
+  
+  return NextResponse.json(tasks)
+}
+```
+```sql
+-- Add database indexes
+-- prisma/migrations/XXX_add_task_indexes/migration.sql
+
+-- ✅ Index on companyId (most frequent filter)
+CREATE INDEX "Task_companyId_idx" ON "Task"("companyId");
+
+-- ✅ Composite index (companyId + deletedAt + createdAt)
+CREATE INDEX "Task_companyId_deletedAt_createdAt_idx" 
+ON "Task"("companyId", "deletedAt", "createdAt" DESC);
+
+-- ✅ Index on foreign keys (speeds up joins)
+CREATE INDEX "Task_creatorId_idx" ON "Task"("creatorId");
+CREATE INDEX "Task_assigneeId_idx" ON "Task"("assigneeId");
+```
+```typescript
+// prisma/schema.prisma (add index declarations)
+model Task {
+  id          String    @id @default(cuid())
+  title       String
+  companyId   String
+  creatorId   String
+  assigneeId  String?
+  deletedAt   DateTime?
+  createdAt   DateTime  @default(now())
+  
+  creator     User      @relation("TaskCreator", fields: [creatorId], references: [id])
+  assignee    User?     @relation("TaskAssignee", fields: [assigneeId], references: [id])
+  
+  // ✅ Index declarations
+  @@index([companyId])
+  @@index([companyId, deletedAt, createdAt(sort: Desc)])
+  @@index([creatorId])
+  @@index([assigneeId])
+}
+```
+
+**EXPLANATION OF OPTIMIZATIONS:**
+
+1. **Fixed N+1 Problem:**
+   - Before: 201 queries (1 + 100 × 2)
+   - After: 1 query (Prisma join)
+   - How: Used `include` to fetch related data in single query
+
+2. **Added Indexes:**
+   - Before: Sequential scan (slow on large tables)
+   - After: Index scan (fast lookup)
+   - Why: Indexes on frequently filtered columns (companyId, deletedAt)
+
+3. **Reduced Data Transfer:**
+   - Before: Fetching all user fields (including password hash)
+   - After: Only fetching needed fields (id, name, email)
+   - How: Used `select` to specify fields
+
+4. **Added Pagination:**
+   - Before: Fetching ALL tasks (could be 10,000+)
+   - After: Fetching 50 tasks per page
+   - Why: Faster response, less memory
+
+3. BENCHMARK RESULTS
+
+**BEFORE OPTIMIZATION:**
+```
+Metric                  | Value
+------------------------|--------
+Query Count             | 201
+Execution Time (p50)    | 1,800ms
+Execution Time (p95)    | 2,500ms
+Database Load           | High (200+ queries)
+Data Transferred        | 2.5MB
+Memory Usage            | 150MB
+```
+
+**AFTER OPTIMIZATION:**
+```
+Metric                  | Value      | Improvement
+------------------------|------------|-------------
+Query Count             | 1          | 99.5% ↓
+Execution Time (p50)    | 45ms       | 97.5% ↓
+Execution Time (p95)    | 78ms       | 96.9% ↓
+Database Load           | Low (1 query) | 99.5% ↓
+Data Transferred        | 180KB      | 92.8% ↓
+Memory Usage            | 12MB       | 92.0% ↓
+```
+
+**SUMMARY:**
+- ✅ **32x faster** (2,500ms → 78ms)
+- ✅ **200x fewer queries** (201 → 1)
+- ✅ **13x less data** (2.5MB → 180KB)
+- ✅ **Target met** (78ms < 100ms goal)
+
+**SQL Execution Plan (After):**
+```sql
+EXPLAIN ANALYZE 
+SELECT * FROM "Task" 
+LEFT JOIN "User" AS creator ON "Task"."creatorId" = creator.id
+LEFT JOIN "User" AS assignee ON "Task"."assigneeId" = assignee.id
+WHERE "Task"."companyId" = 'company-123' AND "Task"."deletedAt" IS NULL
+ORDER BY "Task"."createdAt" DESC
+LIMIT 50;
+
+-- Result:
+Index Scan using Task_companyId_deletedAt_createdAt_idx on Task
+  (cost=0.29..8.31 rows=50 width=500) (actual time=0.012..12.456 rows=50 loops=1)
+  Index Cond: (("companyId" = 'company-123') AND ("deletedAt" IS NULL))
+Planning Time: 0.089 ms
+Execution Time: 45.123 ms  ← FAST! ✅
+
+-- Improvements:
+✅ Index scan (was: Seq scan)
+✅ Single query (was: 201 queries)
+✅ 54x faster (2,456ms → 45ms)
+```
+
+4. MONITORING
+```typescript
+// lib/monitoring/performance.ts
+import { performance } from 'perf_hooks'
+
+export async function measureQuery<T>(
+  name: string,
+  query: () => Promise<T>
+): Promise<T> {
+  const start = performance.now()
+  
+  try {
+    const result = await query()
+    const duration = performance.now() - start
+    
+    // Log slow queries (>100ms)
+    if (duration > 100) {
+      console.warn(`Slow query detected: ${name} took ${duration.toFixed(2)}ms`)
+      
+      // Send to monitoring service
+      if (process.env.NODE_ENV === 'production') {
+        // Example: Datadog, New Relic
+        sendMetric('database.query.slow', duration, { query: name })
+      }
+    }
+    
+    // Track all queries
+    sendMetric('database.query.duration', duration, { query: name })
+    
+    return result
+  } catch (error) {
+    const duration = performance.now() - start
+    console.error(`Query failed: ${name} after ${duration.toFixed(2)}ms`, error)
+    throw error
+  }
+}
+
+// Usage:
+const tasks = await measureQuery('fetch-tasks', () =>
+  prisma.task.findMany({ /* ... */ })
+)
+```
+```typescript
+// Set up alerts (example: Datadog)
+// Alert when p95 query time > 200ms for 5 minutes
+
+{
+  "name": "Slow Task Query",
+  "query": "avg(last_5m):avg:database.query.duration{query:fetch-tasks} > 200",
+  "message": "Task query is slow! Current p95: {{value}}ms (threshold: 200ms)",
+  "tags": ["performance", "database"],
+  "priority": "P2"
+}
+```
+
+VALIDATION CHECKLIST:
+□ Bottleneck identified (N+1 queries + missing indexes)
+□ Baseline measured (2,500ms before optimization)
+□ Optimizations implemented:
+  □ Fixed N+1 (Prisma include)
+  □ Added indexes (companyId, composite)
+  □ Reduced data transfer (select specific fields)
+  □ Added pagination (limit 50)
+□ Performance improved (78ms, 32x faster)
+□ Target met (78ms < 100ms goal)
+□ No regressions (all tests pass, functionality intact)
+□ Monitoring configured (track query duration, alert on slow queries)
+□ Documentation updated (explained optimization strategy)
+═══════════════════════════════════════════════════════════
+````
+
+---
+
+## 🔒 PATTERN #11: SECURITY AUDIT PATTERN
+
+### When to Use
+
+**Comprehensive security review** - checking code against security best practices and commandments.
+
+**Examples:**
+- "Audit this API against OWASP Top 10"
+- "Security review of payment processing code"
+- "Validate compliance with 10 Strategic Commandments"
+- "Check for SQL injection vulnerabilities"
+
+**Success Rate:** 85-95% (when using established checklists)
+
+---
+
+### Pattern Template
+````markdown
+═══════════════════════════════════════════════════════════
+SECURITY AUDIT PATTERN TEMPLATE
+═══════════════════════════════════════════════════════════
+
+PERSONA: You are a senior security engineer with [YEARS] years of experience 
+conducting security audits. You've achieved CISSP/OSCP certifications and have 
+prevented multiple data breaches. You understand OWASP Top 10, the 10 Strategic 
+Commandments, and penetration testing.
+
+CONTEXT:
+[Standard 5-layer context]
+
+CODE TO AUDIT:
+```[language]
+[Paste code for security review]
+```
+
+AUDIT SCOPE:
+
+SECURITY FRAMEWORKS:
+- [x] 10 Strategic Commandments (from Article VI)
+- [x] OWASP Top 10 (2021)
+- [ ] PCI DSS (if handling payments)
+- [ ] HIPAA (if handling health data)
+
+FOCUS AREAS:
+- [ ] Authentication/Authorization
+- [ ] Input Validation
+- [ ] Data Protection
+- [ ] Session Management
+- [ ] API Security
+
+TASK: Conduct comprehensive security audit of [CODE] against the 10 Strategic 
+Commandments and OWASP Top 10. Identify ALL vulnerabilities (critical to low).
+
+META-INSTRUCTIONS:
+- Check EVERY commandment explicitly
+- Don't just identify issues, provide fixes
+- Prioritize by severity (Critical > High > Medium > Low)
+- Think like an attacker (how would I exploit this?)
+- Reference specific OWASP/CWE categories
+
+OUTPUT FORMAT:
+
+(Same format as Pattern #3: Validator Pattern for Security)
+
+DELIVERABLES:
+1. Executive Summary (severity counts, rating)
+2. Detailed Findings (issue, impact, fix, reference)
+3. Compliance Matrix (which commandments violated)
+4. Recommended Actions (immediate, short-term, long-term)
+
+VALIDATION CHECKLIST:
+□ All 10 Commandments checked
+□ OWASP Top 10 checked
+□ Critical vulnerabilities identified
+□ Fixes provided (not just problems)
+□ References included (OWASP, CWE)
+□ Compliance status assessed
+═══════════════════════════════════════════════════════════
+````
+
+---
+
+*(Security Audit real example omitted for brevity - similar to Pattern #3 Validator example)*
+
+---
+
+## 📚 PATTERN #12: DOCUMENTATION PATTERN
+
+### When to Use
+
+**Generating documentation** - creating README files, API docs, code comments.
+
+**Examples:**
+- "Generate README for this project"
+- "Create API documentation for all endpoints"
+- "Add JSDoc comments to this module"
+- "Write setup guide for local development"
+
+**Success Rate:** 95%+ (straightforward task)
+
+---
+
+### Pattern Template
+````markdown
+═══════════════════════════════════════════════════════════
+DOCUMENTATION PATTERN TEMPLATE
+═══════════════════════════════════════════════════════════
+
+PERSONA: You are a senior technical writer with [YEARS] years of experience writing 
+developer documentation. You understand how to explain complex systems clearly and 
+write documentation that developers actually read and use.
+
+CONTEXT:
+[Standard 5-layer context]
+
+CODE/PROJECT TO DOCUMENT:
+```[language]
+[Paste code or describe project]
+```
+
+DOCUMENTATION TYPE:
+- [ ] README.md (project overview, setup)
+- [ ] API Documentation (endpoints, parameters, responses)
+- [ ] Code Comments (JSDoc, inline comments)
+- [ ] Architecture Documentation (system design, decisions)
+- [ ] User Guide (how to use features)
+
+AUDIENCE:
+- [ ] Developers (technical audience)
+- [ ] Non-technical users (simple language)
+- [ ] Mixed audience
+
+TASK: Create [TYPE] documentation for [PROJECT] that helps [AUDIENCE] understand 
+and use the system effectively.
+
+DOCUMENTATION REQUIREMENTS:
+
+STRUCTURE:
+- Clear headings (hierarchical)
+- Examples (code snippets, usage)
+- Visuals (diagrams if needed)
+
+CONTENT:
+- What: What does this do?
+- Why: Why does it exist?
+- How: How to use it?
+- When: When to use it?
+
+STYLE:
+- Concise (no fluff)
+- Examples (show, don't just tell)
+- Searchable (good headings, keywords)
+
+META-INSTRUCTIONS:
+- Start with overview (what and why)
+- Include quick start (get running fast)
+- Provide examples (working code samples)
+- Explain WHY (not just HOW)
+- Keep updated (documentation decays fast)
+
+OUTPUT FORMAT:
+
+DELIVERABLES:
+
+1. DOCUMENTATION (complete)
+2. Examples (working code samples)
+3. Diagrams (if applicable)
+
+VALIDATION CHECKLIST:
+□ Clear and concise
+□ Examples provided (working code)
+□ Audience-appropriate (technical level matches)
+□ Searchable (good structure, headings)
+□ Accurate (reflects current code)
+□ Complete (covers all features)
+═══════════════════════════════════════════════════════════
+````
+
+---
+
+*(Documentation real example omitted for brevity)*
+
+---
+
+## 🎓 MASTERY ASSESSMENT
+
+### Have You Mastered the 12 Patterns?
+
+Before moving to Article III, verify you can:
+````markdown
+□ Name all 12 patterns from memory
+  1. Scaffolding
+  2. Delta
+  3. Validator
+  4. Debugging
+  5. Integration
+  6. Refactoring
+  7. Testing
+  8. Architecture
+  9. Migration
+  10. Performance
+  11. Security Audit
+  12. Documentation
+
+□ Identify which pattern to use for different scenarios:
+  - "Build user auth from scratch" → Scaffolding
+  - "Add logging to existing API" → Delta
+  - "Review code for security" → Validator
+  - "Fix: Session expires immediately" → Debugging
+  - "Connect Stripe to dashboard" → Integration
+  - "Improve code quality" → Refactoring
+  - "Write tests for API" → Testing
+  - "Design SaaS architecture" → Architecture
+  - "Upgrade Next.js 13 → 14" → Migration
+  - "Speed up slow query" → Performance
+  - "Check OWASP compliance" → Security Audit
+  - "Generate README" → Documentation
+
+□ Understand when to combine patterns:
+  - Scaffolding + Testing (build new feature + write tests)
+  - Validator + Refactoring (review code + improve it)
+  - Migration + Testing (upgrade + verify no regressions)
+  - Performance + Debugging (fix slow code + find bottleneck)
+````
+
+### Pattern Selection Decision Tree
+````
+START: What do you need to do?
+
+├─ Create something NEW?
+│  ├─ Single feature → SCAFFOLDING (#1)
+│  └─ Entire system → ARCHITECTURE (#8)
+│
+├─ Modify EXISTING code?
+│  ├─ Minimal changes → DELTA (#2)
+│  ├─ Improve quality → REFACTORING (#6)
+│  ├─ Upgrade tech → MIGRATION (#9)
+│  └─ Speed it up → PERFORMANCE (#10)
+│
+├─ Review/Validate code?
+│  ├─ General review → VALIDATOR (#3)
+│  ├─ Security focus → SECURITY AUDIT (#11)
+│  └─ Add tests → TESTING (#7)
+│
+├─ Fix a BUG?
+│  └─ Debug and fix → DEBUGGING (#4)
+│
+├─ Connect systems?
+│  └─ Integration → INTEGRATION (#5)
+│
+└─ Create DOCS?
+   └─ Documentation → DOCUMENTATION (#12)
+````
+
+---
+
+## 🎯 PRACTICAL EXERCISE
+
+**Challenge:** Apply the appropriate pattern to this scenario:
+
+**Scenario:**
+"Our task list API is slow (2 seconds response time). We need it under 300ms. 
+The code works correctly but has performance issues. We suspect database queries 
+are the problem."
+
+**Questions:**
+1. Which pattern should you use? → **Performance (#10)**
+2. What's the first step? → **Measure/Profile** (identify bottleneck)
+3. What might be the issue? → N+1 queries, missing indexes
+4. How to verify improvement? → **Benchmark** before/after
+
+---
+
+## 🏆 PATTERN MASTERY CERTIFICATION
+
+**You've mastered the 12 patterns when you can:**
+
+✅ **Identify** the right pattern for any scenario (80%+ accuracy)
+✅ **Apply** the pattern template without looking it up
+✅ **Combine** multiple patterns for complex scenarios
+✅ **Explain** WHY a pattern is appropriate (not just WHAT it does)
+✅ **Achieve** 90%+ first-prompt success rate in real projects
+
+**Next Steps:**
+- [Article III: Context Engineering Mastery →](./03-article-iii-context-engineering.md)
+- [← Back to Article I](./01-article-i-anatomy-of-prompt.md)
+- [↑ Technique Layer README](./README.md)
+
+---
+
+## 📖 QUICK REFERENCE: THE 12 PATTERNS
+
+| # | Pattern | When to Use | Success Rate |
+|---|---------|-------------|--------------|
+| 1 | **Scaffolding** | New feature from scratch | 85-95% |
+| 2 | **Delta** | Minimal changes to existing code | 90-95% |
+| 3 | **Validator** | Review code for issues | 80-90% |
+| 4 | **Debugging** | Fix bugs | 85-95% |
+| 5 | **Integration** | Connect systems | 75-85% |
+| 6 | **Refactoring** | Improve code quality | 85-90% |
+| 7 | **Testing** | Write automated tests | 90-95% |
+| 8 | **Architecture** | Design systems | 70-80% |
+| 9 | **Migration** | Upgrade technologies | 75-85% |
+| 10 | **Performance** | Optimize speed | 80-90% |
+| 11 | **Security Audit** | Security review | 85-95% |
+| 12 | **Documentation** | Generate docs | 95%+ |
+
+---
+
+## 🔗 NAVIGATION
+
+**Current Location:** Article II - The 12 Constitutional Prompt Patterns
+
+### Technique Layer (Segment 2) Articles:
+- [← Article I: Anatomy of Prompt](./01-article-i-anatomy-of-prompt.md)
+- **Article II: Prompt Patterns** (You are here)
+- [→ Article III: Context Engineering](./03-article-iii-context-engineering.md)
+- [Article IV: Iterative Refinement](./04-article-iv-iterative-refinement.md)
+- [Article V: Debugging Mastery](./05-article-v-debugging-mastery.md)
+- [Article VI: AI Orchestration](./06-article-vi-ai-orchestration.md)
+- [Article VII: Certification](./07-article-vii-certification.md)
+
+### Other Sections:
+- [↑ Technique Layer README](./README.md)
+- [← Foundation Layer (Segment 1)](../01-foundation-layer/README.md)
+- [→ Tooling Layer (Segment 3)](../03-tooling-layer/README.md)
+- [← Main README](../../README.md)
+
+---
+
+## 💬 FEEDBACK
+
+**Found this helpful?** These 12 patterns represent years of trial-and-error distilled into reusable templates.
+
+**Questions or improvements?**
+- [GitHub Issues](https://github.com/PromptHeroStudio/strateg-constitution-v2/issues)
+- [GitHub Discussions](https://github.com/PromptHeroStudio/strateg-constitution-v2/discussions)
+
+---
+
+## 🎉 CONCLUSION
+
+**You've completed Article II: The 12 Constitutional Prompt Patterns!**
+
+**What You've Learned:**
+- ✅ 12 battle-tested prompt patterns for common scenarios
+- ✅ When to use each pattern (decision tree)
+- ✅ How to apply patterns effectively (templates + examples)
+- ✅ How to combine patterns for complex tasks
+
+**Success Rate Impact:**
+- **Before:** 20% first-prompt success (ad-hoc prompts)
+- **After:** 90% first-prompt success (pattern-based prompts)
+
+**What's Next:**
+
+In **Article III: Context Engineering Mastery**, you'll learn:
+- The 5-Layer Context Framework
+- How to inject comprehensive context
+- Context templates for different scenarios
+- Why context is 80% of prompt quality
+
+**Ready to continue?** [Article III: Context Engineering →](./03-article-iii-context-engineering.md)
+
+**Need review?** [← Article I: Anatomy of Prompt](./01-article-i-anatomy-of-prompt.md)
+
+---
+
+**Remember:** Don't write prompts from scratch. Use patterns. That's how pros do it.
+
+---
+
+**End of Article II**
