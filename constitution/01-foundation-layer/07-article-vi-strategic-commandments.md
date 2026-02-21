@@ -4378,3 +4378,1423 @@ Risk mitigation: Catastrophic failures prevented
 
 ═══════════════════════════════════════════════════════════
 ```
+# 📄 ARTICLE VI: STRATEGIC COMMANDMENTS (NASTAVAK)
+
+**Nastavljam od Commandment V...**
+
+---
+
+```markdown
+## ⏱️ COMMANDMENT V: RATE LIMITING
+
+### The Mandate
+
+> **"Thou shalt implement rate limiting on all public endpoints. Prevent brute force attacks, denial of service, and resource abuse through intelligent throttling."**
+
+### Rationale
+
+**OWASP Reference:** A07:2021 - Identification and Authentication Failures
+
+Rate limiting prevents:
+- **Brute force attacks** (unlimited password guessing)
+- **Credential stuffing** (testing stolen credentials)
+- **Denial of Service** (overwhelming server resources)
+- **API abuse** (scraping, data harvesting)
+- **Cost exploitation** (expensive operations repeated)
+
+**Real-world incidents:**
+- 2021: Twitch - 10,000 login attempts/second, 47 accounts compromised
+- 2020: GitHub - DDoS attack mitigated by rate limiting (prevented outage)
+- 2019: Reddit - API abuse cost $2M/year in infrastructure (before rate limiting)
+
+**Constitutional Principle:** Article I, Law #3 (Security First)
+
+---
+
+### Implementation Requirements
+
+#### 1. AUTHENTICATION ENDPOINTS (CRITICAL)
+
+```typescript
+// ✅ CONSTITUTIONAL - Rate limiting on authentication
+
+import { Ratelimit } from '@upstash/ratelimit'
+import { Redis } from '@upstash/redis'
+
+// Initialize Redis client
+const redis = new Redis({
+  url: process.env.UPSTASH_REDIS_REST_URL!,
+  token: process.env.UPSTASH_REDIS_REST_TOKEN!
+})
+
+// Rate limiter for login attempts
+const loginRateLimit = new Ratelimit({
+  redis,
+  limiter: Ratelimit.slidingWindow(5, '15 m'), // 5 attempts per 15 minutes
+  analytics: true,
+  prefix: 'ratelimit:login'
+})
+
+export async function POST(request: Request) {
+  const { email, password } = await request.json()
+  
+  // Rate limit by IP address
+  const ip = request.headers.get('x-forwarded-for') || 'unknown'
+  const { success, limit, remaining, reset } = await loginRateLimit.limit(ip)
+  
+  if (!success) {
+    // Rate limit exceeded
+    const resetDate = new Date(reset)
+    return Response.json(
+      {
+        error: 'Too many login attempts',
+        retryAfter: resetDate.toISOString(),
+        remaining: 0
+      },
+      {
+        status: 429, // Too Many Requests
+        headers: {
+          'X-RateLimit-Limit': limit.toString(),
+          'X-RateLimit-Remaining': remaining.toString(),
+          'X-RateLimit-Reset': reset.toString(),
+          'Retry-After': Math.ceil((reset - Date.now()) / 1000).toString()
+        }
+      }
+    )
+  }
+  
+  // Proceed with authentication
+  const user = await validateCredentials(email, password)
+  
+  if (!user) {
+    // Failed login attempt counts toward rate limit
+    return Response.json(
+      { error: 'Invalid credentials' },
+      { status: 401 }
+    )
+  }
+  
+  // Successful login - optionally reset counter
+  // await redis.del(`ratelimit:login:${ip}`)
+  
+  return Response.json({ success: true })
+}
+```
+
+**Constitutional Thresholds (Authentication):**
+- **Login:** 5 attempts per 15 minutes per IP
+- **Registration:** 3 attempts per hour per IP
+- **Password Reset:** 3 attempts per hour per email
+- **Email Verification:** 5 resends per hour per email
+
+---
+
+#### 2. API ENDPOINTS (STANDARD)
+
+```typescript
+// ✅ CONSTITUTIONAL - General API rate limiting
+
+// Different limits for different endpoint types
+const rateLimiters = {
+  // Read operations (GET)
+  read: new Ratelimit({
+    redis,
+    limiter: Ratelimit.slidingWindow(100, '1 m'), // 100 requests/minute
+    prefix: 'ratelimit:api:read'
+  }),
+  
+  // Write operations (POST, PUT, DELETE)
+  write: new Ratelimit({
+    redis,
+    limiter: Ratelimit.slidingWindow(20, '1 m'), // 20 requests/minute
+    prefix: 'ratelimit:api:write'
+  }),
+  
+  // Expensive operations (reports, exports, AI)
+  expensive: new Ratelimit({
+    redis,
+    limiter: Ratelimit.slidingWindow(5, '1 m'), // 5 requests/minute
+    prefix: 'ratelimit:api:expensive'
+  })
+}
+
+// Middleware for API routes
+export async function rateLimit(
+  request: Request,
+  type: 'read' | 'write' | 'expensive' = 'read'
+) {
+  const identifier = await getUserIdentifier(request) // IP or user ID
+  const limiter = rateLimiters[type]
+  
+  const { success, limit, remaining, reset } = await limiter.limit(identifier)
+  
+  if (!success) {
+    throw new Error(`Rate limit exceeded. Try again in ${Math.ceil((reset - Date.now()) / 1000)}s`)
+  }
+  
+  return { limit, remaining, reset }
+}
+
+// Usage in API routes
+export async function GET(request: Request) {
+  const rateInfo = await rateLimit(request, 'read')
+  
+  // Add rate limit headers to response
+  const data = await fetchData()
+  
+  return Response.json(data, {
+    headers: {
+      'X-RateLimit-Limit': rateInfo.limit.toString(),
+      'X-RateLimit-Remaining': rateInfo.remaining.toString(),
+      'X-RateLimit-Reset': rateInfo.reset.toString()
+    }
+  })
+}
+```
+
+**Constitutional Thresholds (API):**
+- **Read operations:** 100 requests/minute per user
+- **Write operations:** 20 requests/minute per user
+- **Expensive operations:** 5 requests/minute per user
+- **Public endpoints:** 30 requests/minute per IP (no auth)
+
+---
+
+#### 3. USER-BASED VS IP-BASED
+
+```typescript
+// ✅ CONSTITUTIONAL - Intelligent identifier selection
+
+async function getUserIdentifier(request: Request): Promise<string> {
+  // Priority 1: Authenticated user ID (most specific)
+  const session = await getSession(request)
+  if (session?.user?.id) {
+    return `user:${session.user.id}`
+  }
+  
+  // Priority 2: IP address (for unauthenticated requests)
+  const ip = request.headers.get('x-forwarded-for') || 
+             request.headers.get('x-real-ip') || 
+             'unknown'
+  
+  // Handle multiple IPs (comma-separated)
+  const clientIP = ip.split(',')[0].trim()
+  
+  return `ip:${clientIP}`
+}
+```
+
+**Constitutional Principle:**
+> Rate limit by USER ID when authenticated (prevents account-based abuse).  
+> Rate limit by IP ADDRESS when unauthenticated (prevents anonymous abuse).
+
+---
+
+#### 4. TIERED RATE LIMITS (OPTIONAL)
+
+```typescript
+// ✅ CONSTITUTIONAL - Different limits per user tier
+
+enum UserTier {
+  FREE = 'FREE',
+  PRO = 'PRO',
+  ENTERPRISE = 'ENTERPRISE'
+}
+
+const tieredLimits = {
+  [UserTier.FREE]: {
+    requests: 100,      // requests per minute
+    window: '1 m'
+  },
+  [UserTier.PRO]: {
+    requests: 500,
+    window: '1 m'
+  },
+  [UserTier.ENTERPRISE]: {
+    requests: 10000,
+    window: '1 m'
+  }
+}
+
+async function createRateLimiter(user: User) {
+  const tier = user.tier || UserTier.FREE
+  const config = tieredLimits[tier]
+  
+  return new Ratelimit({
+    redis,
+    limiter: Ratelimit.slidingWindow(config.requests, config.window),
+    prefix: `ratelimit:${tier.toLowerCase()}`
+  })
+}
+```
+
+---
+
+#### 5. EXPONENTIAL BACKOFF (ADVANCED)
+
+```typescript
+// ✅ CONSTITUTIONAL - Exponential backoff for repeated violations
+
+interface RateLimitViolation {
+  count: number
+  firstViolation: number
+  lastViolation: number
+}
+
+async function getBackoffDuration(identifier: string): Promise<number> {
+  const key = `violations:${identifier}`
+  const data = await redis.get<RateLimitViolation>(key)
+  
+  if (!data) {
+    return 0 // No violations, no backoff
+  }
+  
+  // Exponential backoff: 2^count minutes
+  // 1st violation: 2 minutes
+  // 2nd violation: 4 minutes
+  // 3rd violation: 8 minutes
+  // 4th violation: 16 minutes
+  // Max: 60 minutes (1 hour)
+  const backoffMinutes = Math.min(Math.pow(2, data.count), 60)
+  const backoffMs = backoffMinutes * 60 * 1000
+  
+  const timeSinceLastViolation = Date.now() - data.lastViolation
+  
+  if (timeSinceLastViolation > backoffMs) {
+    // Backoff period expired, reset violations
+    await redis.del(key)
+    return 0
+  }
+  
+  // Still in backoff period
+  return backoffMs - timeSinceLastViolation
+}
+
+async function recordViolation(identifier: string) {
+  const key = `violations:${identifier}`
+  const data = await redis.get<RateLimitViolation>(key)
+  
+  if (!data) {
+    // First violation
+    await redis.set(key, {
+      count: 1,
+      firstViolation: Date.now(),
+      lastViolation: Date.now()
+    }, { ex: 3600 }) // Expire after 1 hour
+  } else {
+    // Subsequent violation
+    await redis.set(key, {
+      count: data.count + 1,
+      firstViolation: data.firstViolation,
+      lastViolation: Date.now()
+    }, { ex: 3600 })
+  }
+}
+
+// In rate limit handler
+export async function POST(request: Request) {
+  const ip = getClientIP(request)
+  
+  // Check if in backoff period
+  const backoffRemaining = await getBackoffDuration(ip)
+  if (backoffRemaining > 0) {
+    return Response.json(
+      {
+        error: 'Account temporarily locked due to repeated violations',
+        retryAfter: new Date(Date.now() + backoffRemaining).toISOString()
+      },
+      { status: 429 }
+    )
+  }
+  
+  // Check rate limit
+  const { success } = await loginRateLimit.limit(ip)
+  
+  if (!success) {
+    // Record violation (triggers exponential backoff)
+    await recordViolation(ip)
+    
+    return Response.json(
+      { error: 'Too many attempts. Backoff period applied.' },
+      { status: 429 }
+    )
+  }
+  
+  // Proceed with request
+}
+```
+
+---
+
+#### 6. MIDDLEWARE IMPLEMENTATION (NEXT.JS)
+
+```typescript
+// ✅ CONSTITUTIONAL - Global rate limiting middleware
+
+// middleware.ts
+import { NextResponse } from 'next/server'
+import type { NextRequest } from 'next/server'
+
+// Define rate limits per path pattern
+const rateLimitConfig = {
+  '/api/auth/login': { requests: 5, window: '15 m' },
+  '/api/auth/register': { requests: 3, window: '1 h' },
+  '/api/auth/reset-password': { requests: 3, window: '1 h' },
+  '/api/*': { requests: 100, window: '1 m' }, // Default for all API
+}
+
+export async function middleware(request: NextRequest) {
+  const pathname = request.nextUrl.pathname
+  
+  // Skip rate limiting for public assets
+  if (pathname.startsWith('/_next') || 
+      pathname.startsWith('/static') ||
+      pathname.match(/\.(ico|png|jpg|jpeg|svg|css|js)$/)) {
+    return NextResponse.next()
+  }
+  
+  // Find matching rate limit config
+  let config = rateLimitConfig[pathname]
+  if (!config) {
+    // Use pattern matching
+    for (const [pattern, limit] of Object.entries(rateLimitConfig)) {
+      if (pathname.startsWith(pattern.replace('*', ''))) {
+        config = limit
+        break
+      }
+    }
+  }
+  
+  if (!config) {
+    return NextResponse.next() // No rate limit for this path
+  }
+  
+  // Apply rate limit
+  const identifier = await getUserIdentifier(request)
+  const limiter = createRateLimiter(config)
+  const { success, limit, remaining, reset } = await limiter.limit(identifier)
+  
+  // Add rate limit headers to all responses
+  const response = success 
+    ? NextResponse.next()
+    : NextResponse.json(
+        { error: 'Rate limit exceeded' },
+        { status: 429 }
+      )
+  
+  response.headers.set('X-RateLimit-Limit', limit.toString())
+  response.headers.set('X-RateLimit-Remaining', remaining.toString())
+  response.headers.set('X-RateLimit-Reset', reset.toString())
+  
+  if (!success) {
+    response.headers.set('Retry-After', Math.ceil((reset - Date.now()) / 1000).toString())
+  }
+  
+  return response
+}
+
+export const config = {
+  matcher: [
+    '/api/:path*',  // All API routes
+    '/auth/:path*'  // All auth pages
+  ]
+}
+```
+
+---
+
+### Common Violations
+
+```markdown
+❌ VIOLATION #1: No rate limiting on authentication
+```typescript
+// ❌ Vulnerable to brute force
+export async function POST(request: Request) {
+  const { email, password } = await request.json()
+  
+  // No rate limiting
+  const user = await validateCredentials(email, password)
+  
+  // Attacker can try unlimited passwords
+  return Response.json({ success: !!user })
+}
+
+// Real incident: 2021 - 47 accounts compromised in 2 hours
+```
+
+---
+
+❌ VIOLATION #2: Client-side rate limiting only
+```typescript
+// ❌ Client-side throttling (easily bypassed)
+
+let attempts = 0
+
+function handleLogin() {
+  attempts++
+  
+  if (attempts > 5) {
+    alert('Too many attempts')
+    return
+  }
+  
+  // API has no rate limit
+  fetch('/api/login', { ... })
+}
+
+// Attacker bypasses by calling API directly (curl, Postman, script)
+```
+
+---
+
+❌ VIOLATION #3: Rate limiting after authentication check
+```typescript
+// ❌ Wrong order (waste resources)
+
+export async function POST(request: Request) {
+  const { email, password } = await request.json()
+  
+  // Expensive database query happens BEFORE rate limit
+  const user = await db.user.findUnique({ where: { email } })
+  const valid = await bcrypt.compare(password, user.password)
+  
+  // Rate limit checked too late
+  const { success } = await rateLimit(request)
+  if (!success) return Response.json({ error: 'Rate limited' }, { status: 429 })
+  
+  // Attacker already consumed database resources
+}
+
+// ✅ CORRECT ORDER:
+// 1. Rate limit (fast, cheap)
+// 2. Input validation (fast, cheap)
+// 3. Database queries (slow, expensive)
+```
+
+---
+
+❌ VIOLATION #4: Same limit for all operations
+```typescript
+// ❌ No differentiation between cheap/expensive operations
+
+const rateLimit = new Ratelimit({
+  redis,
+  limiter: Ratelimit.slidingWindow(100, '1 m')
+})
+
+// Both GET (cheap) and complex report generation (expensive) have same limit
+// Problem: User can exhaust server resources with expensive operations
+```
+
+---
+
+❌ VIOLATION #5: No headers (poor UX)
+```typescript
+// ❌ Rate limit without informing user
+
+if (!success) {
+  return Response.json({ error: 'Too many requests' }, { status: 429 })
+  // No headers: User doesn't know when they can retry
+}
+
+// ✅ CONSTITUTIONAL: Include headers
+if (!success) {
+  return Response.json(
+    { error: 'Too many requests', retryAfter: reset },
+    {
+      status: 429,
+      headers: {
+        'X-RateLimit-Limit': limit.toString(),
+        'X-RateLimit-Remaining': '0',
+        'X-RateLimit-Reset': reset.toString(),
+        'Retry-After': Math.ceil((reset - Date.now()) / 1000).toString()
+      }
+    }
+  )
+}
+```
+```
+
+---
+
+### Constitutional Validation Checklist
+
+```markdown
+RATE LIMITING CHECKLIST:
+
+□ Authentication endpoints rate limited (5 attempts / 15 min)
+□ Registration rate limited (3 attempts / hour per IP)
+□ Password reset rate limited (3 attempts / hour per email)
+□ API endpoints rate limited (100 read, 20 write per minute)
+□ Rate limit checked BEFORE expensive operations
+□ User ID used when authenticated, IP when not
+□ Rate limit headers included in responses (X-RateLimit-*)
+□ Retry-After header on 429 responses
+□ Exponential backoff for repeated violations (optional but recommended)
+□ Different limits for different operation types (read/write/expensive)
+
+UPSTASH REDIS SETUP:
+
+□ Upstash Redis account created (free tier: 10K requests/day)
+□ Environment variables configured:
+  - UPSTASH_REDIS_REST_URL
+  - UPSTASH_REDIS_REST_TOKEN
+□ @upstash/ratelimit package installed (npm install @upstash/ratelimit)
+□ @upstash/redis package installed (npm install @upstash/redis)
+
+ALTERNATIVE SOLUTIONS (if not using Upstash):
+
+Option 1: Vercel KV (Vercel platform)
+□ @vercel/kv package
+□ KV_REST_API_URL and KV_REST_API_TOKEN env vars
+
+Option 2: In-memory (development only, NOT production)
+□ Simple Map() for rate limit tracking
+□ Resets on server restart (not suitable for production)
+□ No multi-instance support (doesn't work with serverless)
+
+TESTING:
+
+□ Test rate limit trigger (make 6 login attempts rapidly)
+□ Verify 429 status code returned
+□ Check Retry-After header present
+□ Verify rate limit resets after window expires
+□ Test with multiple IPs (if IP-based)
+□ Test with multiple users (if user-based)
+```
+
+---
+
+### Error Response Format (Constitutional Standard)
+
+```typescript
+// ✅ CONSTITUTIONAL - Consistent rate limit error format
+
+interface RateLimitErrorResponse {
+  error: string
+  code: 'RATE_LIMIT_EXCEEDED'
+  limit: number           // Maximum requests allowed
+  remaining: number       // Requests remaining (always 0 when limit hit)
+  reset: number          // Unix timestamp when limit resets
+  retryAfter: string     // ISO 8601 timestamp when user can retry
+  message: string        // User-friendly message
+}
+
+// Example response:
+{
+  "error": "Too many login attempts",
+  "code": "RATE_LIMIT_EXCEEDED",
+  "limit": 5,
+  "remaining": 0,
+  "reset": 1704729600000,
+  "retryAfter": "2024-01-08T14:20:00.000Z",
+  "message": "You've exceeded the login attempt limit. Please try again in 15 minutes."
+}
+
+// Status code: 429 Too Many Requests
+// Headers:
+//   X-RateLimit-Limit: 5
+//   X-RateLimit-Remaining: 0
+//   X-RateLimit-Reset: 1704729600000
+//   Retry-After: 900  (seconds until reset)
+```
+
+---
+
+### Client-Side Handling (User Experience)
+
+```typescript
+// ✅ CONSTITUTIONAL - Handle rate limits gracefully
+
+async function loginUser(email: string, password: string) {
+  try {
+    const response = await fetch('/api/auth/login', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ email, password })
+    })
+    
+    if (response.status === 429) {
+      // Rate limit hit
+      const data = await response.json()
+      const retryAfter = new Date(data.retryAfter)
+      const minutes = Math.ceil((retryAfter.getTime() - Date.now()) / 60000)
+      
+      // Show user-friendly message with countdown
+      showError(`Too many login attempts. Please wait ${minutes} minutes before trying again.`)
+      
+      // Optional: Start countdown timer
+      startCountdown(retryAfter)
+      
+      // Disable login button
+      disableLoginButton(retryAfter)
+      
+      return
+    }
+    
+    // Handle other responses
+    if (!response.ok) {
+      const data = await response.json()
+      showError(data.error || 'Login failed')
+      return
+    }
+    
+    // Successful login
+    const data = await response.json()
+    redirectToDashboard()
+    
+  } catch (error) {
+    showError('Network error. Please try again.')
+  }
+}
+
+// Countdown timer component
+function startCountdown(resetTime: Date) {
+  const interval = setInterval(() => {
+    const remaining = resetTime.getTime() - Date.now()
+    
+    if (remaining <= 0) {
+      clearInterval(interval)
+      enableLoginButton()
+      hideCountdown()
+      return
+    }
+    
+    const minutes = Math.floor(remaining / 60000)
+    const seconds = Math.floor((remaining % 60000) / 1000)
+    
+    updateCountdownDisplay(`${minutes}:${seconds.toString().padStart(2, '0')}`)
+  }, 1000)
+}
+```
+
+---
+
+### MVCA Enforcement
+
+```markdown
+WHEN GENERATING AUTHENTICATION OR API ROUTES:
+
+MVCA MUST include in COMPONENT 5 (Security Mandates):
+
+"COMMANDMENT V: RATE LIMITING
+
+MANDATORY:
+1. Rate limiting on authentication endpoints (5 attempts / 15 min)
+2. Rate limiting on API endpoints (100 req/min read, 20 req/min write)
+3. User ID for authenticated requests, IP for unauthenticated
+4. Rate limit headers in responses (X-RateLimit-*)
+5. 429 status code with Retry-After header
+
+IMPLEMENTATION:
+
+Setup (once per project):
+```bash
+npm install @upstash/ratelimit @upstash/redis
+```
+
+Environment variables:
+```env
+UPSTASH_REDIS_REST_URL=https://your-redis.upstash.io
+UPSTASH_REDIS_REST_TOKEN=your-token-here
+```
+
+Code (per endpoint):
+```typescript
+import { Ratelimit } from '@upstash/ratelimit'
+import { Redis } from '@upstash/redis'
+
+const redis = new Redis({
+  url: process.env.UPSTASH_REDIS_REST_URL!,
+  token: process.env.UPSTASH_REDIS_REST_TOKEN!
+})
+
+const rateLimit = new Ratelimit({
+  redis,
+  limiter: Ratelimit.slidingWindow(5, '15 m'),
+  prefix: 'ratelimit:login'
+})
+
+export async function POST(request: Request) {
+  const ip = request.headers.get('x-forwarded-for') || 'unknown'
+  const { success, reset } = await rateLimit.limit(ip)
+  
+  if (!success) {
+    return Response.json(
+      { error: 'Too many attempts' },
+      { status: 429, headers: { 'Retry-After': Math.ceil((reset - Date.now()) / 1000).toString() } }
+    )
+  }
+  
+  // Proceed with authentication
+}
+```
+
+CONSTITUTIONAL THRESHOLDS:
+- Login: 5 attempts / 15 minutes
+- Registration: 3 attempts / hour
+- Password reset: 3 attempts / hour
+- API read: 100 requests / minute
+- API write: 20 requests / minute
+- Expensive operations: 5 requests / minute
+
+VIOLATIONS PROHIBITED:
+❌ No rate limiting on authentication
+❌ Client-side rate limiting only
+❌ Same limit for all operations
+❌ No rate limit headers
+❌ Rate limit after expensive operations
+"
+
+IF USER REQUESTS TO SKIP:
+
+User: "Skip rate limiting for now, we'll add it later"
+
+MVCA Response:
+"❌ CONSTITUTIONAL VIOLATION
+
+Commandment V requires rate limiting from day 1 on authentication endpoints.
+
+REASON:
+Without rate limiting, attackers can brute force passwords immediately.
+2021 incident: 47 accounts compromised in 2 hours (no rate limiting).
+
+IMPACT OF SKIPPING:
+- Vulnerable to brute force (unlimited password guessing)
+- Vulnerable to credential stuffing (testing stolen passwords)
+- No protection against DDoS
+- OWASP A07 violation (Authentication Failures)
+
+TIME TO IMPLEMENT: +15 minutes
+COST: $0 (Upstash free tier: 10K requests/day)
+
+CONSTITUTIONAL REQUIREMENT:
+Authentication endpoints MUST have rate limiting (5 attempts / 15 min).
+
+I cannot generate authentication code without rate limiting.
+This is non-negotiable (Article I, Law #3: Security First).
+
+Shall I include rate limiting in the prompt?"
+```
+
+---
+
+### Monitoring & Analytics
+
+```typescript
+// ✅ CONSTITUTIONAL - Monitor rate limit violations
+
+// Track violations for security analysis
+async function logRateLimitViolation(
+  identifier: string,
+  endpoint: string,
+  metadata?: Record<string, any>
+) {
+  // Log to your monitoring system (Sentry, DataDog, etc.)
+  console.warn('Rate limit violation', {
+    identifier,
+    endpoint,
+    timestamp: new Date().toISOString(),
+    ...metadata
+  })
+  
+  // Optional: Store in database for analysis
+  await prisma.rateLimitViolation.create({
+    data: {
+      identifier,
+      endpoint,
+      timestamp: new Date(),
+      metadata: JSON.stringify(metadata)
+    }
+  })
+  
+  // Optional: Alert if excessive violations from same IP
+  const recentViolations = await redis.incr(`violations:count:${identifier}`)
+  if (recentViolations > 10) {
+    // Send alert to security team
+    await sendSecurityAlert({
+      type: 'EXCESSIVE_RATE_LIMIT_VIOLATIONS',
+      identifier,
+      count: recentViolations
+    })
+  }
+}
+
+// In rate limit handler:
+if (!success) {
+  await logRateLimitViolation(identifier, request.nextUrl.pathname)
+  return Response.json({ error: 'Rate limited' }, { status: 429 })
+}
+```
+
+---
+
+### Cost Optimization
+
+```markdown
+REDIS COSTS (Upstash):
+
+Free Tier:
+- 10,000 commands/day
+- 256 MB storage
+- Perfect for: MVPs, small apps (<1K daily users)
+
+Pay-as-you-go:
+- $0.20 per 100K commands
+- Perfect for: Growing apps (1K-10K users)
+
+Pro ($10/month):
+- 1M commands included
+- $0.10 per additional 100K
+- Perfect for: Established apps (10K+ users)
+
+OPTIMIZATION STRATEGIES:
+
+1. Cache rate limit status (reduce Redis calls)
+```typescript
+// Cache in memory for 10 seconds (reduces Redis calls by 83%)
+const cache = new Map<string, { success: boolean, expires: number }>()
+
+async function checkRateLimit(key: string) {
+  const cached = cache.get(key)
+  if (cached && cached.expires > Date.now()) {
+    return cached.success
+  }
+  
+  const { success } = await rateLimit.limit(key)
+  cache.set(key, { success, expires: Date.now() + 10000 })
+  
+  return success
+}
+```
+
+2. Use coarser windows (reduce precision, lower cost)
+```typescript
+// Instead of: Ratelimit.slidingWindow(100, '1 m')
+// Use: Ratelimit.fixedWindow(100, '1 m')
+// Savings: ~30% fewer Redis operations
+// Trade-off: Less precise (burst possible at window boundary)
+```
+
+3. Differentiate critical vs. non-critical endpoints
+```typescript
+// Only rate limit critical endpoints
+const criticalEndpoints = ['/api/auth/*', '/api/payment/*']
+// Skip rate limit for public, read-only content
+const skipEndpoints = ['/api/blog/*', '/api/public/*']
+```
+```
+
+---
+
+## 🔐 COMMANDMENT VI: ACCESS CONTROL
+
+### The Mandate
+
+> **"Thou shalt implement proper authentication AND authorization. Verify not only WHO the user is (authentication), but also WHAT they can do (authorization). Enforce principle of least privilege."**
+
+### Rationale
+
+**OWASP Reference:** A01:2021 - Broken Access Control (#1 most critical vulnerability)
+
+Access control failures enable:
+- **Horizontal privilege escalation** (user accesses another user's data)
+- **Vertical privilege escalation** (user gains admin privileges)
+- **IDOR (Insecure Direct Object Reference)** (manipulating IDs to access resources)
+- **Missing function-level access control** (hidden admin features accessible)
+
+**Real-world incidents:**
+- 2019: Facebook - 540M records exposed (broken access control)
+- 2021: Parler - All posts/videos scraped (sequential IDs + no auth check)
+- 2020: TikTok - Private videos accessible (IDOR vulnerability)
+
+**Constitutional Principle:** Article I, Law #3 (Security First)
+
+---
+
+### Implementation Requirements
+
+#### 1. AUTHENTICATION VS AUTHORIZATION (CRITICAL DISTINCTION)
+
+```typescript
+// ⚠️ COMMON MISTAKE: Confusing authentication with authorization
+
+// ❌ INSUFFICIENT - Authentication only (knows WHO, not WHAT)
+export async function GET(request: Request) {
+  const session = await getSession(request)
+  
+  if (!session) {
+    return Response.json({ error: 'Unauthorized' }, { status: 401 })
+  }
+  
+  // PROBLEM: Any authenticated user can access this
+  // No check if THIS user should access THIS resource
+  const userId = request.nextUrl.searchParams.get('userId')
+  const profile = await prisma.user.findUnique({ where: { id: userId } })
+  
+  return Response.json(profile)
+}
+
+// ✅ CONSTITUTIONAL - Authentication + Authorization
+export async function GET(request: Request) {
+  // Step 1: AUTHENTICATION (WHO is making request?)
+  const session = await getSession(request)
+  
+  if (!session) {
+    return Response.json({ error: 'Unauthorized' }, { status: 401 })
+  }
+  
+  // Step 2: AUTHORIZATION (Can THIS user access THIS resource?)
+  const userId = request.nextUrl.searchParams.get('userId')
+  
+  // Check: User can only access their own profile (or is admin)
+  if (session.user.id !== userId && session.user.role !== 'ADMIN') {
+    return Response.json(
+      { error: 'Forbidden - you cannot access this profile' },
+      { status: 403 }
+    )
+  }
+  
+  // Authorization passed, proceed
+  const profile = await prisma.user.findUnique({ where: { id: userId } })
+  
+  return Response.json(profile)
+}
+```
+
+**Constitutional Principle:**
+> Authentication answers "WHO?"  
+> Authorization answers "CAN THIS USER DO THIS?"  
+> BOTH are required.
+
+---
+
+#### 2. RESOURCE OWNERSHIP VALIDATION
+
+```typescript
+// ✅ CONSTITUTIONAL - Verify user owns resource before allowing access
+
+export async function PUT(
+  request: Request,
+  { params }: { params: { id: string } }
+) {
+  const session = await getSession(request)
+  
+  if (!session) {
+    return Response.json({ error: 'Unauthorized' }, { status: 401 })
+  }
+  
+  // Fetch resource from database
+  const post = await prisma.post.findUnique({
+    where: { id: params.id },
+    select: { id: true, authorId: true, title: true, content: true }
+  })
+  
+  if (!post) {
+    return Response.json({ error: 'Post not found' }, { status: 404 })
+  }
+  
+  // CRITICAL: Verify ownership
+  if (post.authorId !== session.user.id && session.user.role !== 'ADMIN') {
+    return Response.json(
+      { error: 'Forbidden - you do not own this post' },
+      { status: 403 }
+    )
+  }
+  
+  // Ownership verified, proceed with update
+  const body = await request.json()
+  const updated = await prisma.post.update({
+    where: { id: params.id },
+    data: { title: body.title, content: body.content }
+  })
+  
+  return Response.json(updated)
+}
+```
+
+**Common Mistake:**
+```typescript
+// ❌ VULNERABLE - No ownership check
+export async function DELETE(request: Request, { params }: { params: { id: string } }) {
+  const session = await getSession(request)
+  if (!session) return Response.json({ error: 'Unauthorized' }, { status: 401 })
+  
+  // PROBLEM: Any authenticated user can delete any post
+  await prisma.post.delete({ where: { id: params.id } })
+  
+  return Response.json({ success: true })
+}
+
+// Attack scenario:
+// 1. User creates account
+// 2. User enumerates post IDs (post_123, post_124, post_125...)
+// 3. User deletes all posts (no ownership check)
+// Result: Data loss, service disruption
+```
+
+---
+
+#### 3. ROLE-BASED ACCESS CONTROL (RBAC)
+
+```typescript
+// ✅ CONSTITUTIONAL - Define roles and permissions
+
+enum UserRole {
+  USER = 'USER',           // Standard user
+  MODERATOR = 'MODERATOR', // Can moderate content
+  ADMIN = 'ADMIN'          // Full access
+}
+
+// Prisma schema
+model User {
+  id    String   @id @default(cuid())
+  email String   @unique
+  role  UserRole @default(USER)
+  // ...
+}
+
+// Authorization helper
+function hasRole(user: User, requiredRole: UserRole): boolean {
+  const roleHierarchy = {
+    [UserRole.USER]: 0,
+    [UserRole.MODERATOR]: 1,
+    [UserRole.ADMIN]: 2
+  }
+  
+  return roleHierarchy[user.role] >= roleHierarchy[requiredRole]
+}
+
+// Middleware for role-based access
+export async function requireRole(request: Request, role: UserRole) {
+  const session = await getSession(request)
+  
+  if (!session) {
+    throw new Error('Unauthorized')
+  }
+  
+  if (!hasRole(session.user, role)) {
+    throw new Error(`Forbidden - requires ${role} role`)
+  }
+  
+  return session.user
+}
+
+// Usage in admin routes
+export async function GET(request: Request) {
+  // Require ADMIN role
+  const user = await requireRole(request, UserRole.ADMIN)
+  
+  // User is verified as admin, proceed
+  const allUsers = await prisma.user.findMany()
+  
+  return Response.json(allUsers)
+}
+```
+
+---
+
+#### 4. ATTRIBUTE-BASED ACCESS CONTROL (ABAC) - ADVANCED
+
+```typescript
+// ✅ CONSTITUTIONAL - Fine-grained permissions based on attributes
+
+interface Permission {
+  resource: string      // e.g., "post", "comment", "user"
+  action: string        // e.g., "read", "write", "delete"
+  condition?: (user: User, resource: any) => boolean
+}
+
+const permissions: Record<UserRole, Permission[]> = {
+  [UserRole.USER]: [
+    { resource: 'post', action: 'read' },
+    { resource: 'post', action: 'write', condition: (user, post) => post.authorId === user.id },
+    { resource: 'post', action: 'delete', condition: (user, post) => post.authorId === user.id },
+    { resource: 'comment', action: 'write' }
+  ],
+  
+  [UserRole.MODERATOR]: [
+    { resource: 'post', action: 'read' },
+    { resource: 'post', action: 'write', condition: (user, post) => post.authorId === user.id },
+    { resource: 'post', action: 'delete' }, // Can delete any post
+    { resource: 'comment', action: 'write' },
+    { resource: 'comment', action: 'delete' }, // Can moderate comments
+    { resource: 'user', action: 'suspend' }
+  ],
+  
+  [UserRole.ADMIN]: [
+    { resource: '*', action: '*' } // Full access
+  ]
+}
+
+async function canPerformAction(
+  user: User,
+  action: string,
+  resource: string,
+  resourceData?: any
+): Promise<boolean> {
+  const userPermissions = permissions[user.role]
+  
+  // Check for wildcard permission (admin)
+  if (userPermissions.some(p => p.resource === '*' && p.action === '*')) {
+    return true
+  }
+  
+  // Find matching permission
+  const permission = userPermissions.find(
+    p => (p.resource === resource || p.resource === '*') &&
+         (p.action === action || p.action === '*')
+  )
+  
+  if (!permission) {
+    return false // No permission found
+  }
+  
+  // Check condition if present
+  if (permission.condition && resourceData) {
+    return permission.condition(user, resourceData)
+  }
+  
+  return true
+}
+
+// Usage
+export async function DELETE(request: Request, { params }: { params: { id: string } }) {
+  const session = await getSession(request)
+  if (!session) return Response.json({ error: 'Unauthorized' }, { status: 401 })
+  
+  const post = await prisma.post.findUnique({ where: { id: params.id } })
+  if (!post) return Response.json({ error: 'Not found' }, { status: 404 })
+  
+  // Check permission with ABAC
+  const canDelete = await canPerformAction(session.user, 'delete', 'post', post)
+  
+  if (!canDelete) {
+    return Response.json(
+      { error: 'Forbidden - insufficient permissions' },
+      { status: 403 }
+    )
+  }
+  
+  await prisma.post.delete({ where: { id: params.id } })
+  
+  return Response.json({ success: true })
+}
+```
+
+---
+
+#### 5. PREVENTING IDOR (INSECURE DIRECT OBJECT REFERENCE)
+
+```typescript
+// ❌ VULNERABLE - Sequential IDs expose enumeration
+
+// Database: auto-increment IDs
+model Post {
+  id Int @id @default(autoincrement()) // 1, 2, 3, 4...
+  // ...
+}
+
+// API endpoint
+export async function GET(request: Request) {
+  const id = request.nextUrl.searchParams.get('id')
+  const post = await prisma.post.findUnique({ where: { id: parseInt(id!) } })
+  
+  // Problem: Attacker can enumerate all posts
+  // GET /api/posts?id=1
+  // GET /api/posts?id=2
+  // GET /api/posts?id=3
+  // ...scrape entire database
+}
+
+// ✅ CONSTITUTIONAL - Use UUIDs (non-sequential, unguessable)
+
+model Post {
+  id String @id @default(cuid()) // e.g., "clr3x8y9z0000..."
+  // ...
+}
+
+// Even if attacker tries to guess:
+// GET /api/posts?id=clr3x8y9z0000... (valid)
+// GET /api/posts?id=clr3x8y9z0001... (404, not sequential)
+// Cannot enumerate posts
+```
+
+**Constitutional Standard:**
+> Use UUIDs (cuid, uuid) for all resource IDs, never auto-increment integers.
+
+---
+
+#### 6. MIDDLEWARE PATTERN (DRY PRINCIPLE)
+
+```typescript
+// ✅ CONSTITUTIONAL - Reusable authorization middleware
+
+// lib/auth-middleware.ts
+
+export async function requireAuth(request: Request) {
+  const session = await getSession(request)
+  
+  if (!session) {
+    return Response.json({ error: 'Unauthorized' }, { status: 401 })
+  }
+  
+  return session
+}
+
+export async function requireOwnership<T extends { userId?: string; authorId?: string }>(
+  request: Request,
+  resource: T | null
+) {
+  const session = await requireAuth(request)
+  
+  if (session instanceof Response) {
+    return session // Return 401 if not authenticated
+  }
+  
+  if (!resource) {
+    return Response.json({ error: 'Resource not found' }, { status: 404 })
+  }
+  
+  const resourceOwnerId = resource.userId || resource.authorId
+  
+  if (resourceOwnerId !== session.user.id && session.user.role !== UserRole.ADMIN) {
+    return Response.json(
+      { error: 'Forbidden - you do not own this resource' },
+      { status: 403 }
+    )
+  }
+  
+  return session
+}
+
+// Usage in routes (DRY)
+export async function PUT(request: Request, { params }: { params: { id: string } }) {
+  const post = await prisma.post.findUnique({ where: { id: params.id } })
+  
+  // One-liner authorization check
+  const sessionOrError = await requireOwnership(request, post)
+  if (sessionOrError instanceof Response) return sessionOrError
+  
+  // Authorization passed, proceed
+  const body = await request.json()
+  const updated = await prisma.post.update({
+    where: { id: params.id },
+    data: body
+  })
+  
+  return Response.json(updated)
+}
+```
+
+---
+
+### Common Violations
+
+```markdown
+❌ VIOLATION #1: No authorization check (only authentication)
+```typescript
+// ❌ Any authenticated user can access any resource
+export async function GET(request: Request) {
+  const session = await getSession(request)
+  if (!session) return Response.json({ error: 'Unauthorized' }, { status: 401 })
+  
+  // No ownership check - any user can read any profile
+  const userId = request.nextUrl.searchParams.get('userId')
+  const profile = await prisma.user.findUnique({ where: { id: userId } })
+  
+  return Response.json(profile)
+}
+
+// Real incident: 2019 Facebook - 540M user records exposed
+```
+
+---
+
+❌ VIOLATION #2: Client-side authorization
+```typescript
+// ❌ Hiding UI elements (not real security)
+
+function Dashboard() {
+  const { user } = useSession()
+  
+  return (
+    <div>
+      <h1>Dashboard</h1>
+      {user.role === 'ADMIN' && (
+        <button onClick={() => fetch('/api/admin/delete-all')}>Delete All Users</button>
+      )}
+    </div>
+  )
+}
+
+// Problem: Attacker calls API directly
+// fetch('/api/admin/delete-all', { method: 'POST' })
+// If API doesn't check role, all users deleted
+
+// ✅ CONSTITUTIONAL: Always check on server
+export async function POST(request: Request) {
+  const session = await getSession(request)
+  
+  if (!session || session.user.role !== 'ADMIN') {
+    return Response.json({ error: 'Forbidden' }, { status: 403 })
+  }
+  
+  // Proceed only if admin
+}
+```
+
+---
+
+❌ VIOLATION #3: Using predictable IDs
+```typescript
+// ❌ Auto-increment IDs enable enumeration
+model User {
+  id Int @id @default(autoincrement())
+  email String
+  privateNotes String // Sensitive data
+}
+
+// Attacker script:
+for (let id = 1; id < 10000; id++) {
+  fetch(`/api/users/${id}`)
+    .then(r => r.json())
+    .then(user => collectData(user))
+}
+// Result: All user data scraped
+
+// Real incident: 2021 Parler - All posts/videos scraped via sequential IDs
+```
+
+---
+
+❌ VIOLATION #4: Inconsistent authorization
+```typescript
+// ❌ Authorization checked in some routes, not others
+
+// POST /api/posts - Has authorization ✓
+export async function POST(request: Request) {
+  const session = await getSession(request)
+  if (!session) return Response.json({ error: 'Unauthorized' }, { status: 401 })
+  
+  await prisma.post.create({ data: { authorId: session.user.id, ...body } })
+}
+
+// PUT /api/posts/[id] - Missing authorization ✗
+export async function PUT(request: Request, { params }: { params: { id: string } }) {
+  // No ownership check!
+  await prisma.post.update({ where: { id: params.id }, data: body })
+}
+
+// DELETE /api/posts/[id] - Has authorization ✓
+export async function DELETE(request: Request, { params }: { params: { id: string } }) {
+  const session = await getSession(request)
+  const post = await prisma.post.findUnique({ where: { id: params.id } })
+  if (post.authorId !== session.user.id) return Response.json({ error: 'Forbidden' }, { status: 403 })
+  
+  await prisma.post.delete({ where: { id: params.id } })
+}
+
+// Problem: Attacker can modify posts via PUT (no check)
+```
+
