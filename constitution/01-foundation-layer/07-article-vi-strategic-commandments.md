@@ -5797,4 +5797,1344 @@ export async function DELETE(request: Request, { params }: { params: { id: strin
 
 // Problem: Attacker can modify posts via PUT (no check)
 ```
+# 📄 ARTICLE VI: STRATEGIC COMMANDMENTS (NASTAVAK)
 
+**Nastavljam sa Commandment VII...**
+
+---
+
+```markdown
+### Constitutional Validation Checklist
+
+```markdown
+ACCESS CONTROL CHECKLIST:
+
+□ Authentication implemented (NextAuth.js or equivalent)
+□ Authorization checked on ALL protected routes
+□ Resource ownership validated before access
+□ UUIDs used for all resource IDs (not auto-increment)
+□ Role-based access control (RBAC) implemented
+□ Admin routes require admin role verification
+□ No client-side authorization (UI hiding ≠ security)
+□ Consistent authorization across all CRUD operations
+□ 401 Unauthorized for missing authentication
+□ 403 Forbidden for failed authorization
+□ 404 Not Found (not 403) for resources user shouldn't know exist
+
+MIDDLEWARE PATTERN:
+
+□ requireAuth() helper function created
+□ requireOwnership() helper function created
+□ requireRole() helper function created
+□ Reused across all protected routes (DRY principle)
+
+DATABASE SCHEMA:
+
+□ All models use String @id @default(cuid()) for IDs
+□ User model has role field (enum UserRole)
+□ Ownership relationships defined (authorId, userId, ownerId)
+
+Example:
+```prisma
+model Post {
+  id        String   @id @default(cuid())
+  title     String
+  content   String
+  authorId  String   // Ownership field
+  createdAt DateTime @default(now())
+  
+  author User @relation(fields: [authorId], references: [id], onDelete: Cascade)
+  
+  @@index([authorId])
+}
+
+model User {
+  id    String   @id @default(cuid())
+  email String   @unique
+  role  UserRole @default(USER)
+  
+  posts Post[]   // Owned resources
+}
+
+enum UserRole {
+  USER
+  MODERATOR
+  ADMIN
+}
+```
+```
+
+---
+
+### MVCA Enforcement
+
+```markdown
+WHEN GENERATING PROTECTED ROUTES:
+
+MVCA MUST include in COMPONENT 5 (Security Mandates):
+
+"COMMANDMENT VI: ACCESS CONTROL
+
+MANDATORY:
+1. Authentication check (verify WHO is making request)
+2. Authorization check (verify user CAN access THIS resource)
+3. Resource ownership validation (user owns resource OR is admin)
+4. UUIDs for all resource IDs (not auto-increment integers)
+5. Role-based access control for admin features
+
+IMPLEMENTATION:
+
+Authentication helper (lib/auth.ts):
+```typescript
+import { getServerSession } from 'next-auth'
+
+export async function requireAuth(request: Request) {
+  const session = await getServerSession()
+  
+  if (!session) {
+    throw new Error('Unauthorized')
+  }
+  
+  return session
+}
+```
+
+Authorization helper (lib/auth.ts):
+```typescript
+export async function requireOwnership<T extends { authorId?: string }>(
+  resource: T | null,
+  userId: string
+) {
+  if (!resource) {
+    throw new Error('Resource not found')
+  }
+  
+  if (resource.authorId !== userId) {
+    throw new Error('Forbidden - you do not own this resource')
+  }
+  
+  return resource
+}
+```
+
+Usage in API routes:
+```typescript
+export async function PUT(request: Request, { params }: { params: { id: string } }) {
+  // Step 1: Authentication
+  const session = await requireAuth(request)
+  
+  // Step 2: Fetch resource
+  const post = await prisma.post.findUnique({ where: { id: params.id } })
+  
+  if (!post) {
+    return Response.json({ error: 'Post not found' }, { status: 404 })
+  }
+  
+  // Step 3: Authorization (ownership check)
+  if (post.authorId !== session.user.id && session.user.role !== 'ADMIN') {
+    return Response.json({ error: 'Forbidden' }, { status: 403 })
+  }
+  
+  // Authorization passed, proceed
+  const body = await request.json()
+  const updated = await prisma.post.update({
+    where: { id: params.id },
+    data: body
+  })
+  
+  return Response.json(updated)
+}
+```
+
+VIOLATIONS PROHIBITED:
+❌ Authentication only (no authorization)
+❌ Client-side authorization (UI hiding)
+❌ Auto-increment IDs (enables enumeration)
+❌ No ownership check
+❌ Inconsistent authorization across routes
+"
+
+IF USER REQUESTS VIOLATION:
+
+User: "Skip authorization checks for now, we'll add them later"
+
+MVCA Response:
+"❌ CRITICAL CONSTITUTIONAL VIOLATION
+
+Commandment VI requires authorization on ALL protected routes from day 1.
+
+REASON:
+'We'll add security later' leads to data breaches.
+2019: Facebook exposed 540M records (broken access control).
+2021: Parler scraped entirely (no authorization checks).
+
+IMPACT OF SKIPPING:
+- Any authenticated user can access ANY resource
+- Horizontal privilege escalation (user A reads user B's data)
+- Data theft, privacy violations, legal liability
+- OWASP A01 violation (#1 most critical vulnerability)
+
+TIME TO IMPLEMENT: +5 minutes per endpoint
+COST OF VIOLATION: $4.5M average breach cost + legal fines
+
+CONSTITUTIONAL REQUIREMENT:
+All protected routes MUST verify:
+1. WHO is making request (authentication)
+2. CAN this user access THIS resource (authorization)
+
+I cannot generate protected routes without authorization checks.
+This is non-negotiable (Article I, Law #3: Security First).
+
+Shall I include authorization checks in the prompt?"
+```
+
+---
+
+## 🔒 COMMANDMENT VII: DATA PROTECTION
+
+### The Mandate
+
+> **"Thou shalt protect user data through encryption, minimize data collection, handle PII according to regulations (GDPR, CCPA), and implement privacy by design."**
+
+### Rationale
+
+**OWASP Reference:** A02:2021 - Cryptographic Failures, A04:2021 - Insecure Design
+
+Data protection failures lead to:
+- **Data breaches** (sensitive information exposed)
+- **Privacy violations** (GDPR fines up to €20M or 4% global revenue)
+- **Identity theft** (PII stolen and misused)
+- **Reputational damage** (loss of user trust)
+
+**Real-world incidents:**
+- 2017: Equifax - 147M records breached (SSN, credit cards) - $700M settlement
+- 2019: Marriott - 383M guest records exposed - £18.4M GDPR fine
+- 2021: T-Mobile - 54M customers affected - $500M settlement
+
+**Constitutional Principle:** Article I, Law #3 (Security First) + Article I, Law #4 (User Rights)
+
+---
+
+### Implementation Requirements
+
+#### 1. DATA MINIMIZATION (COLLECT ONLY WHAT'S NEEDED)
+
+```typescript
+// ❌ OVER-COLLECTION (Privacy violation)
+interface UserRegistration {
+  email: string
+  password: string
+  firstName: string
+  lastName: string
+  dateOfBirth: Date        // ❌ Why do you need this?
+  phoneNumber: string      // ❌ Required? Or optional?
+  address: string          // ❌ Necessary for web app?
+  ssn: string              // ❌ NEVER collect unless legally required
+  mothersMaidenName: string // ❌ Security question (insecure)
+  favoriteColor: string    // ❌ Irrelevant data
+}
+
+// ✅ CONSTITUTIONAL - Minimal data collection
+interface UserRegistration {
+  email: string           // Required (login identifier)
+  password: string        // Required (authentication)
+  name: string           // Optional (can use email as display name)
+  // That's it for MVP!
+}
+
+// Additional data collected ONLY when needed:
+interface UserProfile {
+  // Collected only if user wants to add
+  bio?: string
+  website?: string
+  location?: string  // City-level, not full address
+  
+  // NEVER collect:
+  // - SSN (unless financial service with legal requirement)
+  // - Full address (unless e-commerce with shipping)
+  // - Date of birth (unless age verification legally required)
+  // - Government ID numbers
+  // - Financial data (use Stripe, don't store)
+}
+```
+
+**Constitutional Principle:**
+> Only collect data you NEED for the feature to work.  
+> Additional data requires explicit user consent and justification.
+
+---
+
+#### 2. ENCRYPTION AT REST (DATABASE)
+
+```typescript
+// ✅ CONSTITUTIONAL - Encrypt sensitive fields
+
+// Install encryption library
+// npm install @prisma/client-extensions
+
+import { Prisma } from '@prisma/client'
+import crypto from 'crypto'
+
+// Encryption key (store in environment variable)
+const ENCRYPTION_KEY = process.env.ENCRYPTION_KEY! // 32-byte key
+
+function encrypt(text: string): string {
+  const iv = crypto.randomBytes(16)
+  const cipher = crypto.createCipheriv('aes-256-cbc', Buffer.from(ENCRYPTION_KEY, 'hex'), iv)
+  
+  let encrypted = cipher.update(text, 'utf8', 'hex')
+  encrypted += cipher.final('hex')
+  
+  // Store IV with encrypted data (IV doesn't need to be secret)
+  return iv.toString('hex') + ':' + encrypted
+}
+
+function decrypt(text: string): string {
+  const parts = text.split(':')
+  const iv = Buffer.from(parts[0], 'hex')
+  const encryptedText = parts[1]
+  
+  const decipher = crypto.createDecipheriv('aes-256-cbc', Buffer.from(ENCRYPTION_KEY, 'hex'), iv)
+  
+  let decrypted = decipher.update(encryptedText, 'hex', 'utf8')
+  decrypted += decipher.final('utf8')
+  
+  return decrypted
+}
+
+// Prisma model with encrypted field
+model User {
+  id    String @id @default(cuid())
+  email String @unique
+  
+  // Encrypted field (stored as encrypted string in database)
+  socialSecurityNumber String? // Encrypted at rest
+  
+  // Other fields...
+}
+
+// Usage
+async function createUser(email: string, ssn?: string) {
+  const encryptedSSN = ssn ? encrypt(ssn) : null
+  
+  const user = await prisma.user.create({
+    data: {
+      email,
+      socialSecurityNumber: encryptedSSN
+    }
+  })
+  
+  return user
+}
+
+async function getUserSSN(userId: string): Promise<string | null> {
+  const user = await prisma.user.findUnique({
+    where: { id: userId },
+    select: { socialSecurityNumber: true }
+  })
+  
+  if (!user?.socialSecurityNumber) return null
+  
+  return decrypt(user.socialSecurityNumber)
+}
+```
+
+**When to encrypt at rest:**
+- Social Security Numbers (SSN)
+- Tax IDs
+- Financial account numbers (bank accounts, credit cards)
+- Government ID numbers (passport, driver's license)
+- Health information (PHI - HIPAA requirement)
+- Biometric data
+
+**When NOT needed:**
+- Passwords (hashed with bcrypt, not encrypted)
+- Emails (needed for queries, not sensitive enough to encrypt)
+- Usernames, display names
+- Non-sensitive profile data
+
+---
+
+#### 3. ENCRYPTION IN TRANSIT (HTTPS)
+
+```typescript
+// ✅ CONSTITUTIONAL - HTTPS enforced
+
+// Next.js middleware (middleware.ts)
+import { NextResponse } from 'next/server'
+import type { NextRequest } from 'next/server'
+
+export function middleware(request: NextRequest) {
+  // Enforce HTTPS in production
+  if (process.env.NODE_ENV === 'production') {
+    const protocol = request.headers.get('x-forwarded-proto') || 'http'
+    
+    if (protocol !== 'https') {
+      // Redirect to HTTPS
+      const httpsUrl = request.nextUrl.clone()
+      httpsUrl.protocol = 'https'
+      
+      return NextResponse.redirect(httpsUrl, 301) // Permanent redirect
+    }
+  }
+  
+  // Add security headers
+  const response = NextResponse.next()
+  
+  response.headers.set('Strict-Transport-Security', 'max-age=31536000; includeSubDomains')
+  response.headers.set('X-Content-Type-Options', 'nosniff')
+  response.headers.set('X-Frame-Options', 'DENY')
+  response.headers.set('Referrer-Policy', 'strict-origin-when-cross-origin')
+  
+  return response
+}
+
+export const config = {
+  matcher: '/:path*'
+}
+```
+
+**Constitutional Requirement:**
+> HTTPS is MANDATORY in production (no exceptions).  
+> HTTP is acceptable ONLY in local development.
+
+---
+
+#### 4. PII HANDLING (GDPR/CCPA COMPLIANCE)
+
+```typescript
+// ✅ CONSTITUTIONAL - PII identification and protection
+
+// Define what constitutes PII in your app
+enum PIIType {
+  EMAIL = 'EMAIL',                    // GDPR: Personal data
+  NAME = 'NAME',                      // GDPR: Personal data
+  IP_ADDRESS = 'IP_ADDRESS',          // GDPR: Personal data
+  LOCATION = 'LOCATION',              // GDPR: Personal data
+  PHONE = 'PHONE',                    // GDPR: Personal data
+  SSN = 'SSN',                        // GDPR: Special category (extra protection)
+  FINANCIAL = 'FINANCIAL',            // GDPR: Special category
+  HEALTH = 'HEALTH',                  // GDPR: Special category (HIPAA)
+  BIOMETRIC = 'BIOMETRIC'             // GDPR: Special category
+}
+
+// GDPR: User rights implementation
+
+// 1. RIGHT TO ACCESS (export user data)
+export async function GET(request: Request) {
+  const session = await requireAuth(request)
+  
+  // Export ALL user data (GDPR Article 15)
+  const userData = await prisma.user.findUnique({
+    where: { id: session.user.id },
+    include: {
+      posts: true,
+      comments: true,
+      profile: true,
+      // Include all related data
+    }
+  })
+  
+  // Decrypt sensitive fields before export
+  if (userData.socialSecurityNumber) {
+    userData.socialSecurityNumber = decrypt(userData.socialSecurityNumber)
+  }
+  
+  // Return as downloadable JSON
+  return new Response(JSON.stringify(userData, null, 2), {
+    headers: {
+      'Content-Type': 'application/json',
+      'Content-Disposition': 'attachment; filename="my-data.json"'
+    }
+  })
+}
+
+// 2. RIGHT TO ERASURE ("Right to be forgotten" - GDPR Article 17)
+export async function DELETE(request: Request) {
+  const session = await requireAuth(request)
+  
+  // Soft delete (mark as deleted, anonymize data)
+  await prisma.user.update({
+    where: { id: session.user.id },
+    data: {
+      email: `deleted-${session.user.id}@deleted.local`,
+      name: 'Deleted User',
+      socialSecurityNumber: null,
+      deletedAt: new Date(),
+      // Anonymize PII
+    }
+  })
+  
+  // Or hard delete (completely remove)
+  // await prisma.user.delete({ where: { id: session.user.id } })
+  
+  // Delete session
+  await signOut()
+  
+  return Response.json({ success: true, message: 'Account deleted' })
+}
+
+// 3. RIGHT TO RECTIFICATION (GDPR Article 16)
+export async function PUT(request: Request) {
+  const session = await requireAuth(request)
+  const body = await request.json()
+  
+  // User can update their own data
+  const updated = await prisma.user.update({
+    where: { id: session.user.id },
+    data: {
+      name: body.name,
+      email: body.email,
+      // Allow user to correct their data
+    }
+  })
+  
+  return Response.json(updated)
+}
+
+// 4. RIGHT TO DATA PORTABILITY (GDPR Article 20)
+// Same as RIGHT TO ACCESS (export as JSON)
+
+// 5. RIGHT TO OBJECT (GDPR Article 21)
+// Implement opt-out mechanisms:
+model User {
+  id String @id @default(cuid())
+  
+  // Consent flags
+  marketingEmails Boolean @default(false)  // Opt-in for marketing
+  dataProcessing  Boolean @default(true)   // Can opt-out of non-essential processing
+  analytics       Boolean @default(false)  // Opt-in for analytics
+}
+```
+
+**GDPR Compliance Checklist:**
+```markdown
+□ Privacy Policy published (explain what data you collect and why)
+□ Cookie consent (if using analytics/tracking cookies)
+□ Data export feature (user can download their data)
+□ Account deletion feature (user can delete their account)
+□ Data rectification (user can update their data)
+□ Consent management (opt-in for marketing, analytics)
+□ Data breach notification procedure (72 hours to report)
+□ Data Processing Agreement (DPA) with third-party services
+□ Data retention policy (how long you keep data)
+□ DPO contact info (if applicable - >250 employees)
+```
+
+---
+
+#### 5. SECURE DATA DELETION
+
+```typescript
+// ✅ CONSTITUTIONAL - Secure deletion (not just soft delete)
+
+async function secureDelete(userId: string) {
+  // Step 1: Anonymize user data (GDPR-compliant soft delete)
+  await prisma.user.update({
+    where: { id: userId },
+    data: {
+      email: `deleted-${userId}@deleted.local`,
+      name: 'Deleted User',
+      password: null,
+      socialSecurityNumber: null,
+      phoneNumber: null,
+      // Remove all PII
+    }
+  })
+  
+  // Step 2: Delete related data
+  await prisma.$transaction([
+    prisma.session.deleteMany({ where: { userId } }),
+    prisma.post.deleteMany({ where: { authorId: userId } }),
+    prisma.comment.deleteMany({ where: { authorId: userId } }),
+  ])
+  
+  // Step 3: Mark for hard deletion (after retention period)
+  await prisma.deletionQueue.create({
+    data: {
+      userId,
+      scheduledDeletion: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000) // 30 days
+    }
+  })
+  
+  // Step 4: Notify user
+  await sendEmail(originalEmail, {
+    subject: 'Account Deletion Confirmed',
+    body: `Your account will be permanently deleted in 30 days.
+           You can reactivate within this period by logging in.`
+  })
+}
+
+// Cron job: Permanently delete after retention period
+async function processHardDeletions() {
+  const toDelete = await prisma.deletionQueue.findMany({
+    where: {
+      scheduledDeletion: { lte: new Date() }
+    }
+  })
+  
+  for (const item of toDelete) {
+    // Permanent deletion
+    await prisma.user.delete({ where: { id: item.userId } })
+    await prisma.deletionQueue.delete({ where: { id: item.id } })
+  }
+}
+```
+
+**Constitutional Standard:**
+> Soft delete immediately (anonymize PII).  
+> Hard delete after retention period (30 days grace period).  
+> Allow user to cancel deletion within grace period.
+
+---
+
+#### 6. LOGGING WITHOUT PII
+
+```typescript
+// ❌ LOGGING PII (Privacy violation)
+console.log('User registered:', {
+  email: user.email,           // ❌ PII
+  name: user.name,             // ❌ PII
+  ip: request.headers.get('x-forwarded-for'), // ❌ PII
+  password: hashedPassword     // ❌ Even hashed, don't log
+})
+
+// ✅ CONSTITUTIONAL - Log without PII
+console.log('User registered:', {
+  userId: user.id,             // ✓ Non-PII identifier
+  role: user.role,             // ✓ Non-sensitive
+  timestamp: new Date(),       // ✓ Metadata
+  // No email, name, IP, or any PII
+})
+
+// Security events (log with caution)
+console.log('Failed login attempt:', {
+  userId: attemptedUserId || 'unknown', // ✓ If available
+  timestamp: new Date(),
+  reason: 'Invalid password',
+  // DO NOT LOG: email, IP (unless security incident)
+})
+
+// Exception: Security incident logs (store separately, encrypted)
+async function logSecurityIncident(event: string, details: any) {
+  await prisma.securityLog.create({
+    data: {
+      event,
+      details: encrypt(JSON.stringify(details)), // Encrypt PII if necessary
+      timestamp: new Date()
+    }
+  })
+}
+```
+
+**Constitutional Rule:**
+> Never log PII in application logs.  
+> Security incident logs may contain PII (encrypted, access-controlled).
+
+---
+
+### Common Violations
+
+```markdown
+❌ VIOLATION #1: Collecting unnecessary data
+```typescript
+// ❌ Over-collection
+interface UserProfile {
+  ssn: string              // Why do you need this?
+  mothersMaidenName: string // Insecure, unnecessary
+  favoriteColor: string    // Irrelevant
+}
+
+// Real incident: 2017 Equifax - Collected SSN for credit checks,
+// then lost 147M records in breach. $700M settlement.
+```
+
+---
+
+❌ VIOLATION #2: Storing sensitive data in plaintext
+```typescript
+// ❌ Plaintext sensitive data
+model User {
+  id String @id
+  ssn String  // Stored in plaintext (CRITICAL VIOLATION)
+}
+
+// Database breach → All SSNs exposed → Identity theft
+```
+
+---
+
+❌ VIOLATION #3: HTTP in production
+```typescript
+// ❌ No HTTPS enforcement
+// http://yoursite.com/api/login (password transmitted in plaintext)
+
+// Attacker on same network (coffee shop, airport):
+// Intercepts traffic → Steals password → Account compromised
+```
+
+---
+
+❌ VIOLATION #4: No data deletion feature
+```typescript
+// ❌ User cannot delete account (GDPR violation)
+
+// GDPR Article 17: Right to erasure ("right to be forgotten")
+// Failure to implement: €20M fine or 4% global annual revenue
+
+// Real fine: 2019 British Airways - £183M GDPR fine (no data deletion)
+```
+
+---
+
+❌ VIOLATION #5: Logging PII
+```typescript
+// ❌ PII in application logs
+console.log('Registration:', user.email, user.name, user.ip)
+
+// Logs stored in:
+// - CloudWatch (Amazon)
+// - Vercel logs (retained 7 days)
+// - Error tracking (Sentry)
+// → PII exposed in multiple systems
+// → GDPR violation (excessive data sharing)
+```
+```
+
+---
+
+### Constitutional Validation Checklist
+
+```markdown
+DATA PROTECTION CHECKLIST:
+
+□ Data minimization (collect only necessary data)
+□ Sensitive fields encrypted at rest (SSN, financial data, health info)
+□ HTTPS enforced in production (redirect HTTP → HTTPS)
+□ Security headers configured (HSTS, CSP, X-Frame-Options)
+□ PII identified and protected (GDPR compliance)
+□ User rights implemented (export, delete, update data)
+□ Privacy Policy published (/privacy page)
+□ Cookie consent (if using tracking cookies)
+□ No PII in application logs
+□ Data retention policy defined
+□ Secure deletion procedure (soft delete → hard delete)
+□ Encryption keys in environment variables (not hardcoded)
+□ Third-party DPAs signed (if using services that process user data)
+
+ENCRYPTION SETUP:
+
+□ Encryption key generated (32-byte random key)
+□ Stored in environment variable (ENCRYPTION_KEY)
+□ Encryption functions created (encrypt, decrypt)
+□ Applied to sensitive fields only (not all data)
+
+Generate encryption key:
+```bash
+node -e "console.log(require('crypto').randomBytes(32).toString('hex'))"
+```
+
+Add to .env.local:
+```env
+ENCRYPTION_KEY=your-32-byte-hex-key-here
+```
+
+HTTPS VERIFICATION:
+
+□ SSL certificate active (check browser padlock icon)
+□ HTTPS redirect working (http://yoursite.com → https://yoursite.com)
+□ HSTS header present (check response headers)
+□ No mixed content warnings (all resources loaded via HTTPS)
+
+GDPR COMPLIANCE (If EU users):
+
+□ Privacy Policy includes:
+  - What data you collect
+  - Why you collect it
+  - How long you keep it
+  - Who you share it with (third parties)
+  - User rights (access, delete, rectify, object)
+  - Contact information (DPO if applicable)
+
+□ User rights implemented:
+  - Export data (GET /api/user/export)
+  - Delete account (DELETE /api/user/account)
+  - Update data (PUT /api/user/profile)
+  - Opt-out (marketing emails, analytics)
+
+□ Cookie consent:
+  - Banner shown on first visit
+  - Opt-in for non-essential cookies (analytics, marketing)
+  - Essential cookies explained (authentication, security)
+
+□ Data breach procedure:
+  - Notify supervisory authority within 72 hours
+  - Notify affected users if high risk
+  - Document breach (what, when, impact, measures taken)
+```
+
+---
+
+### MVCA Enforcement
+
+```markdown
+WHEN GENERATING DATA HANDLING CODE:
+
+MVCA MUST include in COMPONENT 5 (Security Mandates):
+
+"COMMANDMENT VII: DATA PROTECTION
+
+MANDATORY:
+1. Data minimization (collect only necessary data)
+2. Encrypt sensitive data at rest (SSN, financial, health)
+3. HTTPS enforced in production (no HTTP)
+4. No PII in application logs
+5. GDPR user rights implemented (export, delete, update)
+
+SENSITIVE DATA ENCRYPTION:
+
+If collecting sensitive data (SSN, financial, health):
+
+```typescript
+import crypto from 'crypto'
+
+const ENCRYPTION_KEY = process.env.ENCRYPTION_KEY!
+
+function encrypt(text: string): string {
+  const iv = crypto.randomBytes(16)
+  const cipher = crypto.createCipheriv('aes-256-cbc', Buffer.from(ENCRYPTION_KEY, 'hex'), iv)
+  
+  let encrypted = cipher.update(text, 'utf8', 'hex')
+  encrypted += cipher.final('hex')
+  
+  return iv.toString('hex') + ':' + encrypted
+}
+
+function decrypt(text: string): string {
+  const parts = text.split(':')
+  const iv = Buffer.from(parts[0], 'hex')
+  const decipher = crypto.createDecipheriv('aes-256-cbc', Buffer.from(ENCRYPTION_KEY, 'hex'), iv)
+  
+  let decrypted = decipher.update(parts[1], 'hex', 'utf8')
+  decrypted += decipher.final('utf8')
+  
+  return decrypted
+}
+
+// Usage:
+const encryptedSSN = encrypt(userSSN)
+await prisma.user.create({ data: { ssn: encryptedSSN } })
+```
+
+HTTPS ENFORCEMENT:
+
+```typescript
+// middleware.ts
+export function middleware(request: NextRequest) {
+  if (process.env.NODE_ENV === 'production') {
+    const proto = request.headers.get('x-forwarded-proto')
+    
+    if (proto !== 'https') {
+      const httpsUrl = request.nextUrl.clone()
+      httpsUrl.protocol = 'https'
+      return NextResponse.redirect(httpsUrl, 301)
+    }
+  }
+  
+  // Security headers
+  const response = NextResponse.next()
+  response.headers.set('Strict-Transport-Security', 'max-age=31536000')
+  return response
+}
+```
+
+GDPR USER RIGHTS:
+
+□ Export data: GET /api/user/export (returns JSON with all user data)
+□ Delete account: DELETE /api/user/account (soft delete, then hard delete after 30 days)
+□ Update data: PUT /api/user/profile (user can correct their data)
+
+LOGGING WITHOUT PII:
+
+✓ Log: userId, timestamp, event type, metadata
+✗ Never log: email, name, IP, password (even hashed), SSN, phone
+
+VIOLATIONS PROHIBITED:
+❌ Collecting unnecessary data (data minimization violation)
+❌ Storing sensitive data in plaintext (encryption required)
+❌ HTTP in production (HTTPS mandatory)
+❌ PII in logs (privacy violation)
+❌ No user deletion feature (GDPR violation if EU users)
+"
+
+IF USER REQUESTS VIOLATION:
+
+User: "We don't need HTTPS for now, we'll add it later"
+
+MVCA Response:
+"❌ CRITICAL CONSTITUTIONAL VIOLATION
+
+Commandment VII requires HTTPS in production from day 1.
+
+REASON:
+HTTP transmits all data in plaintext (passwords, session cookies, PII).
+Anyone on the same network can intercept (coffee shop, airport, ISP).
+
+REAL INCIDENTS:
+- 2014: Firesheep tool demonstrated stealing Facebook sessions over HTTP
+- Thousands of accounts hijacked in minutes at coffee shops
+
+IMPACT OF SKIPPING:
+- Passwords stolen (account hijacking)
+- Session cookies stolen (impersonation)
+- PII exposed (privacy violation)
+- Browser warnings ('Not Secure' label)
+- SEO penalty (Google ranks HTTPS higher)
+- GDPR violation (inadequate security measures)
+
+IMPLEMENTATION:
+Vercel/Netlify: HTTPS automatic (free SSL certificate)
+Time: 0 minutes (already enabled by default)
+Cost: $0
+
+CONSTITUTIONAL REQUIREMENT:
+HTTPS is MANDATORY in production (Article I, Law #3).
+No exceptions.
+
+I cannot generate production-ready code without HTTPS enforcement.
+
+Would you like me to include HTTPS enforcement in middleware?"
+```
+
+---
+
+## ⚠️ COMMANDMENT VIII: ERROR HANDLING
+
+### The Mandate
+
+> **"Thou shalt handle errors securely. Never expose stack traces, system details, or sensitive information in error messages. Fail securely, log appropriately, provide user-friendly messages."**
+
+### Rationale
+
+**OWASP Reference:** A05:2021 - Security Misconfiguration, A09:2021 - Security Logging Failures
+
+Improper error handling enables:
+- **Information disclosure** (stack traces reveal code structure)
+- **System fingerprinting** (error messages reveal technologies)
+- **Path traversal** (file paths exposed in errors)
+- **Database schema exposure** (SQL errors reveal table/column names)
+- **Attack vector discovery** (errors guide attackers)
+
+**Real-world incidents:**
+- 2019: Capital One - Error messages revealed AWS credentials ($80M fine)
+- 2020: Microsoft - Stack traces exposed internal API endpoints
+- 2018: British Airways - Debug mode left on in production ($230M fine)
+
+**Constitutional Principle:** Article I, Law #3 (Security First) + Article I, Law #5 (Transparent Reasoning)
+
+---
+
+### Implementation Requirements
+
+#### 1. GENERIC ERROR MESSAGES (PUBLIC)
+
+```typescript
+// ❌ EXPOSING SYSTEM DETAILS (Information disclosure)
+
+export async function POST(request: Request) {
+  try {
+    const { email } = await request.json()
+    
+    const user = await prisma.user.findUnique({ where: { email } })
+    
+    if (!user) {
+      // ❌ VULNERABLE - Reveals user existence
+      return Response.json(
+        { error: 'User with email test@example.com does not exist' },
+        { status: 404 }
+      )
+    }
+    
+  } catch (error) {
+    // ❌ CRITICAL VIOLATION - Exposes internal details
+    return Response.json({
+      error: error.message,
+      stack: error.stack,
+      query: 'SELECT * FROM users WHERE email = ...',
+      database: 'PostgreSQL 14.5 on port 5432'
+    }, { status: 500 })
+  }
+}
+
+// Problems:
+// 1. User enumeration (attacker knows which emails are registered)
+// 2. Stack trace reveals code structure
+// 3. Database details exposed (type, version, port)
+// 4. SQL query revealed (database schema exposed)
+
+// ✅ CONSTITUTIONAL - Generic error messages
+
+export async function POST(request: Request) {
+  try {
+    const { email } = await request.json()
+    
+    const user = await prisma.user.findUnique({ where: { email } })
+    
+    if (!user) {
+      // ✓ Generic message (no user enumeration)
+      return Response.json(
+        { error: 'Invalid credentials' },  // Same message for "user not found" and "wrong password"
+        { status: 401 }
+      )
+    }
+    
+  } catch (error) {
+    // ✓ Generic error (no sensitive details)
+    console.error('Error in login:', error) // Log full details for developers
+    
+    return Response.json(
+      {
+        error: 'An error occurred. Please try again later.',
+        code: 'INTERNAL_ERROR',
+        requestId: generateRequestId() // For user to reference in support ticket
+      },
+      { status: 500 }
+    )
+  }
+}
+```
+
+**Constitutional Rule:**
+> Public error messages must be generic.  
+> Detailed errors logged server-side (not exposed to users).
+
+---
+
+#### 2. DETAILED LOGGING (INTERNAL)
+
+```typescript
+// ✅ CONSTITUTIONAL - Detailed logging for developers
+
+import { createLogger } from 'winston'
+
+const logger = createLogger({
+  level: 'info',
+  format: winston.format.json(),
+  transports: [
+    // Production: Send to log aggregation service
+    new winston.transports.File({ filename: 'error.log', level: 'error' }),
+    new winston.transports.File({ filename: 'combined.log' })
+  ]
+})
+
+export async function POST(request: Request) {
+  const requestId = generateRequestId()
+  
+  try {
+    const { email, password } = await request.json()
+    
+    const user = await prisma.user.findUnique({ where: { email } })
+    
+    if (!user) {
+      // Log for internal analysis (NOT exposed to user)
+      logger.warn('Login attempt for non-existent user', {
+        requestId,
+        email: maskEmail(email), // Partially mask: t***@example.com
+        timestamp: new Date(),
+        ip: request.headers.get('x-forwarded-for')
+      })
+      
+      return Response.json(
+        { error: 'Invalid credentials', requestId },
+        { status: 401 }
+      )
+    }
+    
+    // Password validation...
+    
+  } catch (error) {
+    // Detailed logging (full error details)
+    logger.error('Unexpected error in login', {
+      requestId,
+      error: {
+        message: error.message,
+        stack: error.stack,
+        name: error.name
+      },
+      context: {
+        url: request.url,
+        method: request.method,
+        headers: sanitizeHeaders(request.headers), // Remove sensitive headers
+        timestamp: new Date()
+      }
+    })
+    
+    // Generic response to user
+    return Response.json(
+      {
+        error: 'An error occurred. Please try again later.',
+        requestId // User can provide this in support ticket
+      },
+      { status: 500 }
+    )
+  }
+}
+
+// Helper: Mask email for logging (partial anonymization)
+function maskEmail(email: string): string {
+  const [local, domain] = email.split('@')
+  
+  if (local.length <= 2) return `${local}@${domain}`
+  
+  const masked = local[0] + '*'.repeat(local.length - 2) + local[local.length - 1]
+  return `${masked}@${domain}`
+  // Example: test@example.com → t**t@example.com
+}
+
+// Helper: Sanitize headers (remove sensitive data)
+function sanitizeHeaders(headers: Headers): Record<string, string> {
+  const sanitized: Record<string, string> = {}
+  
+  headers.forEach((value, key) => {
+    // Don't log sensitive headers
+    if (key.toLowerCase() === 'authorization' ||
+        key.toLowerCase() === 'cookie' ||
+        key.toLowerCase() === 'x-api-key') {
+      sanitized[key] = '[REDACTED]'
+    } else {
+      sanitized[key] = value
+    }
+  })
+  
+  return sanitized
+}
+```
+
+---
+
+#### 3. ERROR CODE SYSTEM
+
+```typescript
+// ✅ CONSTITUTIONAL - Error code system (user-friendly + trackable)
+
+enum ErrorCode {
+  // Authentication errors (4000-4099)
+  AUTH_INVALID_CREDENTIALS = 'AUTH_4001',
+  AUTH_ACCOUNT_LOCKED = 'AUTH_4002',
+  AUTH_EMAIL_NOT_VERIFIED = 'AUTH_4003',
+  AUTH_SESSION_EXPIRED = 'AUTH_4004',
+  
+  // Authorization errors (4100-4199)
+  AUTHZ_INSUFFICIENT_PERMISSIONS = 'AUTHZ_4101',
+  AUTHZ_RESOURCE_NOT_OWNED = 'AUTHZ_4102',
+  
+  // Validation errors (4200-4299)
+  VALIDATION_INVALID_INPUT = 'VAL_4201',
+  VALIDATION_MISSING_FIELD = 'VAL_4202',
+  
+  // Rate limiting (4290-4299)
+  RATE_LIMIT_EXCEEDED = 'RATE_4290',
+  
+  // Server errors (5000-5999)
+  INTERNAL_ERROR = 'SRV_5000',
+  DATABASE_ERROR = 'SRV_5001',
+  EXTERNAL_SERVICE_ERROR = 'SRV_5002'
+}
+
+interface ErrorResponse {
+  error: string           // User-friendly message
+  code: ErrorCode        // Machine-readable code
+  requestId: string      // For support tickets
+  details?: any          // Optional: Field-specific errors (validation)
+  retryAfter?: string    // Optional: For rate limiting
+}
+
+// Usage
+export async function POST(request: Request) {
+  const requestId = generateRequestId()
+  
+  try {
+    const { email, password } = await request.json()
+    
+    // Input validation
+    const validation = validateLoginInput({ email, password })
+    if (!validation.success) {
+      return Response.json({
+        error: 'Invalid input',
+        code: ErrorCode.VALIDATION_INVALID_INPUT,
+        requestId,
+        details: validation.errors // Field-specific errors
+      }, { status: 400 })
+    }
+    
+    // Rate limiting
+    const rateLimit = await checkRateLimit(request)
+    if (!rateLimit.success) {
+      return Response.json({
+        error: 'Too many login attempts. Please try again later.',
+        code: ErrorCode.RATE_LIMIT_EXCEEDED,
+        requestId,
+        retryAfter: rateLimit.resetTime
+      }, { status: 429 })
+    }
+    
+    // Authentication
+    const user = await authenticateUser(email, password)
+    
+    if (!user) {
+      logger.warn('Failed login attempt', { requestId, email: maskEmail(email) })
+      
+      return Response.json({
+        error: 'Invalid credentials',
+        code: ErrorCode.AUTH_INVALID_CREDENTIALS,
+        requestId
+      }, { status: 401 })
+    }
+    
+    // Success
+    return Response.json({ success: true, user })
+    
+  } catch (error) {
+    logger.error('Unexpected error', { requestId, error })
+    
+    return Response.json({
+      error: 'An unexpected error occurred. Please try again later.',
+      code: ErrorCode.INTERNAL_ERROR,
+      requestId
+    }, { status: 500 })
+  }
+}
+```
+
+**Benefits of error codes:**
+- User can reference in support ticket ("Error AUTH_4001")
+- Support team can quickly identify issue
+- Developers can grep logs for specific error types
+- Internationalization friendly (translate based on code)
+
+---
+
+#### 4. DEVELOPMENT VS PRODUCTION ERRORS
+
+```typescript
+// ✅ CONSTITUTIONAL - Different error detail levels per environment
+
+const isDevelopment = process.env.NODE_ENV === 'development'
+
+function formatError(error: Error, requestId: string): ErrorResponse {
+  if (isDevelopment) {
+    // Development: Full details for debugging
+    return {
+      error: error.message,
+      code: ErrorCode.INTERNAL_ERROR,
+      requestId,
+      stack: error.stack,              // ✓ Show stack trace in development
+      details: {
+        name: error.name,
+        cause: error.cause
+      }
+    }
+  } else {
+    // Production: Generic message only
+    return {
+      error: 'An error occurred. Please try again later.',
+      code: ErrorCode.INTERNAL_ERROR,
+      requestId
+      // ✗ No stack trace in production
+    }
+  }
+}
+
+// Usage
+export async function GET(request: Request) {
+  const requestId = generateRequestId()
+  
+  try {
+    // ... application logic
+    
+  } catch (error) {
+    logger.error('Error in GET request', { requestId, error })
+    
+    const errorResponse = formatError(error, requestId)
+    
+    return Response.json(errorResponse, { status: 500 })
+  }
+}
+```
+
+---
+
+#### 5. GLOBAL ERROR HANDLER (NEXT.JS)
+
+```typescript
+// ✅ CONSTITUTIONAL - Global error boundary
+
+// app/error.tsx (Next.js 13+ App Router)
+'use client'
+
+import { useEffect } from 'react'
+import * as Sentry from '@sentry/nextjs'
+
+export default function Error({
+  error,
+  reset
+}: {
+  error: Error & { digest?: string }
+  reset: () => void
+}) {
+  useEffect(() => {
+    // Log error to monitoring service
+    Sentry.captureException(error)
+  }, [error])
+  
+  return (
+    <div className="error-container">
+      <h1>Something went wrong</h1>
+      <p>
+        We've been notified and are working on it.
+        Please try again later.
+      </p>
+      
+      {/* Request ID for support (if available) */}
+      {error.digest && (
+        <p className="text-sm text-gray-500">
+          Error ID: {error.digest}
+        </p>
+      )}
+      
+      <button onClick={() => reset()}>
+        Try again
+      </button>
+      
+      {/* ✗ Do NOT show error.message or error.stack in production */}
+      {process.env.NODE_ENV === 'development' && (
+        <details className="mt-4">
+          <summary>Error details (development only)</summary>
+          <pre>{error.stack}</pre>
+        </details>
+      )}
+    </div>
+  )
+}
+
+// app/global-error.tsx (Catches errors in root layout)
+'use client'
+
+export default function GlobalError({
+  error,
+  reset
+}: {
+  error: Error & { digest?: string }
+  reset: () => void
+}) {
+  return (
+    <html>
+      <body>
+        <h1>Application Error</h1>
+        <p>An unexpected error occurred. Please refresh the page.</p>
+        <button onClick={() => reset()}>Refresh</button>
+      </body>
+    </html>
+  )
+}
+```
