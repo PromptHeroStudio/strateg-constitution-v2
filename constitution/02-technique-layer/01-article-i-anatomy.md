@@ -957,7 +957,1054 @@ GRADING:
 ```
 
 ---
+## 📝 COMPONENT 4: REQUIREMENTS SPECIFICATION
 
-**Current Progress: 3/7 components complete**
+### Purpose
 
-Should I continue with Components 4-7? 🚀
+Transform vague feature descriptions into precise, testable requirements. Bridge the gap between "what we want" (business goal) and "what to build" (implementation).
+
+### Structure
+````markdown
+COMPONENT 4: REQUIREMENTS SPECIFICATION
+────────────────────────────────────────────────────────
+
+FUNCTIONAL REQUIREMENTS:
+[What the feature must DO]
+
+1. [Requirement 1]
+   - [Sub-requirement 1a]
+   - [Sub-requirement 1b]
+
+2. [Requirement 2]
+   - [Sub-requirement 2a]
+
+TECHNICAL REQUIREMENTS:
+[HOW to implement]
+
+1. [Technical decision 1]
+2. [Technical decision 2]
+
+NON-FUNCTIONAL REQUIREMENTS:
+[Quality attributes: performance, security, accessibility]
+
+- Performance: [response time, load capacity]
+- Security: [OWASP compliance, encryption]
+- Accessibility: [WCAG level, keyboard navigation]
+- Scalability: [concurrent users, data volume]
+
+EDGE CASES:
+[Unusual scenarios that must be handled]
+
+1. [Edge case 1] → [Expected behavior]
+2. [Edge case 2] → [Expected behavior]
+
+DATA REQUIREMENTS:
+[Database schema, data models]
+```prisma
+[Prisma schema or data structure]
+```
+````
+
+---
+
+### Functional Requirements
+
+**Purpose:** Define what the user can DO with the feature
+
+**Format:** Action-oriented statements
+
+**Example - Password Reset:**
+````markdown
+FUNCTIONAL REQUIREMENTS:
+
+1. Request Password Reset:
+   - User can click "Forgot Password" link on login page
+   - User enters their registered email address
+   - System validates email format (Zod schema)
+   - System sends password reset email within 1 minute
+   - User sees confirmation: "If email exists, reset link sent"
+
+2. Receive Reset Email:
+   - Email contains unique reset link (valid 24 hours)
+   - Link format: https://app.com/reset-password?token=abc123...
+   - Email explains link expires in 24 hours
+   - Email includes "Didn't request this?" security notice
+
+3. Reset Password:
+   - User clicks reset link in email
+   - System validates token (not expired, not used, exists)
+   - User sees password reset form (if token valid)
+   - User enters new password (must meet requirements)
+   - System validates password strength (Zod schema)
+   - System updates password (bcrypt hash, cost 12)
+   - System marks token as used (single-use enforcement)
+   - User automatically logged in (new session created)
+
+4. Password Changed Notification:
+   - System sends "Password Changed" email to user
+   - Email includes time, date, IP address (security audit)
+   - Email includes "Wasn't you?" link to report unauthorized access
+````
+
+**Key Principles:**
+- ✅ User-centric (describes user actions)
+- ✅ Specific (not "user can reset password" - too vague)
+- ✅ Complete (covers entire user journey)
+- ✅ Testable (can verify each requirement)
+
+---
+
+### Technical Requirements
+
+**Purpose:** Define HOW to implement (technology choices, architectural decisions)
+
+**Example - Password Reset:**
+````markdown
+TECHNICAL REQUIREMENTS:
+
+1. Token Generation:
+   - Use crypto.randomBytes(32) for token generation
+   - Cryptographically secure random (not Math.random())
+   - 32 bytes = 256 bits (sufficient entropy)
+
+2. Token Storage:
+   - Store SHA-256 hash of token (not plaintext)
+   - Include userId, hashedToken, expiresAt, usedAt
+   - Index on hashedToken for fast lookup
+   - Cascade delete when user deleted
+
+3. Email Sending:
+   - SendGrid Transactional Email API
+   - Template: password-reset-v1
+   - From: noreply@app.com
+   - Subject: "Reset Your Password - TaskMaster Pro"
+
+4. Password Validation:
+   - Zod schema: min 8 chars, uppercase, number, special char
+   - Server-side validation (never trust client)
+   - Error messages specific (not generic "invalid password")
+
+5. Password Hashing:
+   - bcrypt with cost factor 12 (constitutional minimum)
+   - Async hashing (bcrypt.hash, not bcrypt.hashSync)
+   - Replace old hash (don't keep history)
+
+6. Session Creation:
+   - NextAuth.js signIn() after successful reset
+   - Database-backed session (not JWT)
+   - 7-day expiration (constitutional maximum)
+````
+
+**Key Principles:**
+- ✅ Technology-specific (names libraries, APIs)
+- ✅ Explains WHY (not just WHAT)
+- ✅ Includes version numbers where critical
+- ✅ References constitutional mandates
+
+---
+
+### Non-Functional Requirements
+
+**Purpose:** Define quality attributes (the "-ilities")
+
+**Categories:**
+1. **Performance:** Speed, response time, throughput
+2. **Security:** OWASP compliance, encryption, authentication
+3. **Accessibility:** WCAG compliance, keyboard navigation, screen readers
+4. **Scalability:** Concurrent users, data volume, growth capacity
+5. **Reliability:** Uptime, error rates, recovery time
+6. **Usability:** Ease of use, learning curve, user satisfaction
+7. **Maintainability:** Code quality, documentation, testability
+
+**Example - Password Reset:**
+````markdown
+NON-FUNCTIONAL REQUIREMENTS:
+
+PERFORMANCE:
+- Password reset request: < 500ms response time (P95)
+- Email sent: < 60 seconds from request
+- Reset form load: < 2 seconds (3G network)
+- Password update: < 1 second (bcrypt is expensive, acceptable)
+
+SECURITY:
+- OWASP A02 (Cryptographic Failures):
+  ✓ Tokens stored hashed (SHA-256)
+  ✓ Passwords hashed (bcrypt cost 12)
+  
+- OWASP A07 (Authentication Failures):
+  ✓ Rate limiting: 3 reset requests per hour per email
+  ✓ Token expiry: 24 hours maximum
+  ✓ Single-use tokens (cannot reuse after password changed)
+  
+- OWASP A08 (Data Integrity):
+  ✓ CSRF protection (NextAuth.js handles)
+  ✓ HTTPS enforced (all reset links use https://)
+
+- Generic error messages (prevent user enumeration):
+  ✓ "If email exists, reset link sent" (not "Email not found")
+
+ACCESSIBILITY (WCAG 2.1 AA):
+- Form labels: All inputs have <label htmlFor> association
+- Error messages: aria-live="polite" announces errors
+- Keyboard navigation: Can Tab through entire flow
+- Focus indicators: Visible focus ring on all interactive elements
+- Color contrast: ≥ 4.5:1 for all text
+- Screen reader: "Reset Password" form properly announced
+
+SCALABILITY:
+- Can handle 1,000 concurrent password reset requests
+- Token table can store 100K+ tokens (with indexes)
+- Email queue can handle 10K emails/hour (SendGrid limit)
+
+RELIABILITY:
+- Email delivery: 99% success rate (SendGrid SLA)
+- Token generation: 100% success (crypto.randomBytes never fails)
+- Database operations: Retry on transient failures (Prisma retry logic)
+
+USABILITY:
+- Clear instructions: "Check your email for reset link"
+- Password requirements visible: Show requirements before user types
+- Success feedback: "Password changed successfully, logging you in..."
+- Error recovery: "Link expired? Request a new one" with link
+
+MAINTAINABILITY:
+- TypeScript strict mode (no 'any' types)
+- Unit tests: Token generation, validation, expiry logic
+- Integration tests: Complete password reset flow
+- Documentation: JSDoc comments on all public functions
+````
+
+---
+
+### Edge Cases
+
+**Purpose:** Ensure robustness by handling unusual scenarios
+
+**Categories:**
+1. **User behavior:** Unexpected actions, corner cases
+2. **System failures:** Network errors, database timeouts
+3. **Security:** Attack attempts, malicious input
+4. **Timing:** Race conditions, concurrent operations
+5. **Data:** Empty states, large data, special characters
+
+**Example - Password Reset:**
+````markdown
+EDGE CASES:
+
+1. Email Not Registered:
+   → Show generic message: "If email exists, reset link sent"
+   → Prevents user enumeration (attacker can't discover registered emails)
+   → Still rate limit (prevent abuse)
+
+2. Multiple Reset Requests:
+   → Invalidate previous tokens (only latest token valid)
+   → User receives new email: "You requested another reset link"
+   → Old links show: "Token expired or already used"
+
+3. Token Expired (>24 hours):
+   → Show error: "This reset link has expired"
+   → Offer: "Request a new password reset link" (button)
+   → Log security event (potential attack if many expired attempts)
+
+4. Token Already Used:
+   → Show error: "This reset link has already been used"
+   → Offer: "Request a new password reset link"
+   → Security note: "If you didn't change your password, contact support"
+
+5. User Already Logged In:
+   → Redirect to dashboard with message: "You're already logged in"
+   → Or: Allow password change from settings (different flow)
+
+6. Reset Requested While Password Reset Pending:
+   → Invalidate old token, generate new one
+   → User gets new email: "New reset link sent (previous link canceled)"
+
+7. Weak Password Submitted:
+   → Reject with specific errors:
+     ✗ "Password must be at least 8 characters"
+     ✗ "Password must contain an uppercase letter"
+     ✗ "Password must contain a number"
+     ✗ "Password must contain a special character (!@#$%^&*)"
+
+8. User Deletes Account During Reset Process:
+   → Token becomes invalid (cascade delete in database)
+   → Reset link shows: "This reset link is no longer valid"
+
+9. Network Timeout During Email Sending:
+   → Retry email sending (max 3 attempts)
+   → If all retries fail, log error (notify support team)
+   → User sees: "Reset link sent" (don't expose email failure)
+
+10. Concurrent Password Resets (Same User, Multiple Devices):
+    → Only latest token valid (previous tokens invalidated)
+    → First to use valid token wins
+    → Others get: "Token expired or already used"
+
+11. SQL Injection Attempt in Email Input:
+    → Zod validation rejects (not valid email format)
+    → Prisma parameterized queries prevent injection anyway
+    → Log security event (potential attack)
+
+12. Token Manipulation (User Modifies Token in URL):
+    → SHA-256 hash won't match any stored token
+    → Show: "Invalid reset link"
+    → Rate limit token validation attempts (prevent brute force)
+
+13. User Clicks Reset Link Multiple Times (Impatient):
+    → First click: Show reset form
+    → Subsequent clicks (token not used yet): Show same form
+    → After password changed: Show "already used" error
+
+14. Email Delivery Failure (SendGrid Down):
+    → Retry with exponential backoff (1s, 2s, 4s)
+    → If 3 retries fail, add to background job queue
+    → User still sees: "If email exists, reset link sent"
+    → Background job retries every 5 minutes for 1 hour
+
+15. User Enters Same Password as Current Password:
+    → Allow it (constitutional principle: user sovereignty)
+    → But: Show warning "This is your current password"
+    → Reason: User might not remember, forcing change is annoying
+````
+
+**Key Principles:**
+- ✅ Anticipate misuse (security edge cases)
+- ✅ Handle failures gracefully (don't crash)
+- ✅ Maintain security (even in edge cases)
+- ✅ User-friendly error messages
+
+---
+
+### Data Requirements
+
+**Purpose:** Define database schema, relationships, constraints
+
+**Example - Password Reset:**
+````markdown
+DATA REQUIREMENTS:
+
+PRISMA SCHEMA:
+```prisma
+model User {
+  id                String   @id @default(cuid())
+  email             String   @unique
+  password          String?  // Nullable (OAuth users have no password)
+  name              String
+  emailVerified     DateTime?
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+  
+  // Relations
+  resetTokens       ResetToken[]
+  sessions          Session[]
+  
+  @@index([email])
+}
+
+model ResetToken {
+  id                String   @id @default(cuid())
+  hashedToken       String   @unique  // SHA-256 hash of actual token
+  userId            String
+  expiresAt         DateTime
+  usedAt            DateTime?  // Null = not used, DateTime = used
+  createdAt         DateTime @default(now())
+  
+  // Relations
+  user              User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  
+  // Indexes for performance
+  @@index([hashedToken])  // Fast token lookup
+  @@index([userId])       // Fast user token lookup
+  @@index([expiresAt])    // Clean up expired tokens
+}
+```
+
+SCHEMA NOTES:
+
+1. ResetToken.hashedToken:
+   - Store SHA-256 hash (not plaintext token)
+   - Unique constraint (no duplicate tokens)
+   - Index for O(1) lookup performance
+
+2. ResetToken.expiresAt:
+   - Timestamp when token becomes invalid
+   - Index for cleanup job (delete expired tokens)
+   - Checked on every token validation
+
+3. ResetToken.usedAt:
+   - Null = token not used yet (can still be used)
+   - DateTime = token used (cannot reuse)
+   - Single-use enforcement
+
+4. Cascade Delete:
+   - When User deleted → All ResetTokens deleted
+   - Prevents orphaned tokens in database
+
+5. User.password Nullable:
+   - OAuth users (Google, GitHub) have no password
+   - Allow null to support social login
+
+DATA FLOW:
+
+1. User requests reset:
+   → Create ResetToken (hashedToken, userId, expiresAt)
+   → Send email with plaintext token (not stored)
+
+2. User clicks link:
+   → Extract token from URL query param
+   → Hash with SHA-256
+   → Look up ResetToken by hashedToken
+   → Validate: expiresAt > now, usedAt == null
+
+3. User resets password:
+   → Update User.password (bcrypt hash)
+   → Update ResetToken.usedAt = now()
+   → Token now invalid (single-use enforced)
+
+4. Cleanup (daily cron job):
+   → Delete ResetToken where expiresAt < now - 7 days
+   → Keep recent expired tokens for audit trail (7 days)
+````
+
+---
+
+### Complete Example - Authentication Feature
+````markdown
+COMPONENT 4: REQUIREMENTS SPECIFICATION
+────────────────────────────────────────────────────────
+
+FUNCTIONAL REQUIREMENTS:
+
+1. User Registration:
+   - User can access registration page (/register)
+   - User enters email, password, name
+   - System validates email format (Zod: email())
+   - System validates password strength (8+ chars, complexity)
+   - System checks email uniqueness (not already registered)
+   - System creates user account (bcrypt hash password, cost 12)
+   - System sends verification email (with verification link)
+   - User sees: "Account created. Check email to verify."
+
+2. User Login (Email/Password):
+   - User can access login page (/login)
+   - User enters email and password
+   - System validates credentials (bcrypt.compare)
+   - System rate limits (5 attempts per 15 minutes per IP)
+   - On success: Create session, redirect to /dashboard
+   - On failure: Generic error "Invalid credentials" (no user enumeration)
+
+3. User Login (Google OAuth):
+   - User can click "Continue with Google" button
+   - System initiates Google OAuth flow (NextAuth.js)
+   - User authenticates with Google
+   - System creates user if new (or links to existing by email)
+   - System creates session, redirects to /dashboard
+
+4. Session Management:
+   - Session stored in database (not JWT)
+   - HTTP-only cookie (JavaScript cannot access)
+   - SameSite=Strict (CSRF protection)
+   - 7-day expiration (constitutional maximum)
+   - Session renewed on activity (sliding window)
+
+5. User Logout:
+   - User can click "Logout" button
+   - System deletes session from database
+   - System clears session cookie
+   - User redirected to login page
+
+TECHNICAL REQUIREMENTS:
+
+1. Authentication Framework:
+   - NextAuth.js v5.2.0 (latest stable)
+   - Prisma adapter for database sessions
+   - Google OAuth provider configured
+
+2. Password Hashing:
+   - bcrypt with cost factor 12
+   - Async hashing (bcrypt.hash, not hashSync)
+   - Validate with bcrypt.compare (constant-time)
+
+3. Rate Limiting:
+   - Upstash Redis for rate limit storage
+   - @upstash/ratelimit library
+   - 5 attempts per 15 minutes per IP (login)
+   - 3 attempts per hour per IP (registration)
+
+4. Email Service:
+   - SendGrid Transactional Email API
+   - Template: registration-verification-v1
+   - From: noreply@taskmaster.app
+
+5. Database Models:
+   - User (id, email, password, name, emailVerified)
+   - Session (id, userId, sessionToken, expires)
+   - Account (id, userId, provider, providerAccountId) [for OAuth]
+
+NON-FUNCTIONAL REQUIREMENTS:
+
+PERFORMANCE:
+- Login response: < 500ms (P95) [bcrypt is expensive, acceptable]
+- Session validation: < 50ms (database lookup)
+- OAuth redirect: < 1 second total flow
+
+SECURITY:
+- Commandment III: bcrypt cost 12 (password security)
+- Commandment IV: Database sessions, HTTP-only cookies, CSRF protection
+- Commandment V: Rate limiting (5 attempts / 15 min)
+- Commandment VI: No user enumeration (generic error messages)
+- OWASP A01: Authorization checks on all protected routes
+- OWASP A02: Passwords hashed, sessions encrypted
+- OWASP A07: Rate limiting, session timeout
+
+ACCESSIBILITY (WCAG 2.1 AA):
+- Login form: Labels on all inputs (htmlFor + id)
+- Error messages: aria-live="polite" announces errors
+- Password visibility toggle: aria-label="Show password"
+- Keyboard navigation: Tab through form, Enter submits
+- Focus indicators: Visible 2px outline on all inputs
+- Color contrast: ≥ 4.5:1 for all text
+
+SCALABILITY:
+- Can handle 10,000 concurrent sessions
+- Can handle 1,000 login attempts per minute
+- Redis rate limiter scales horizontally
+
+RELIABILITY:
+- Email delivery: 99% (SendGrid SLA)
+- Session storage: 99.9% uptime (database SLA)
+- OAuth: 99.9% uptime (Google SLA)
+
+EDGE CASES:
+
+1. Email Already Registered:
+   → Error: "Email already in use" (409 Conflict)
+   → Suggest: "Try logging in or reset password"
+
+2. Weak Password Submitted:
+   → Specific errors: "Must contain uppercase", "Must be 8+ chars"
+   → Client-side validation (UX) + server-side (security)
+
+3. OAuth Email Matches Existing Credentials Account:
+   → Link accounts (same email = same user)
+   → Update User.emailVerified = now() (OAuth = verified)
+
+4. Rate Limit Exceeded:
+   → 429 status with Retry-After header
+   → Message: "Too many attempts. Try again in 15 minutes."
+   → Exponential backoff on repeated violations
+
+5. Session Expired During Use:
+   → Redirect to /login with message: "Session expired, please log in"
+   → Preserve original destination (return URL)
+
+6. User Closes Browser (Session Persistence):
+   → Session cookie Max-Age = 7 days (persists browser close)
+   → "Remember me" checkbox (optional): 30 days instead of 7
+
+7. Concurrent Logins (Multiple Devices):
+   → Allow (user can be logged in on phone + laptop)
+   → Optional: Limit to N concurrent sessions (configurable)
+
+8. Account Deleted During Active Session:
+   → Session validation fails (user not found)
+   → Redirect to login: "Account no longer exists"
+
+9. Google OAuth Failure (Google Down):
+   → Show error: "Google login temporarily unavailable"
+   → Fallback: "Try email/password login instead"
+
+10. Email Verification Link Expired (>24 hours):
+    → Show: "Verification link expired"
+    → Offer: "Resend verification email" button
+
+DATA REQUIREMENTS:
+```prisma
+model User {
+  id            String    @id @default(cuid())
+  email         String    @unique
+  password      String?   // Nullable (OAuth users)
+  name          String
+  emailVerified DateTime?
+  image         String?   // Profile picture (from OAuth)
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+  
+  sessions      Session[]
+  accounts      Account[]
+  
+  @@index([email])
+}
+
+model Session {
+  id           String   @id @default(cuid())
+  sessionToken String   @unique
+  userId       String
+  expires      DateTime
+  createdAt    DateTime @default(now())
+  
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  
+  @@index([userId])
+  @@index([sessionToken])
+}
+
+model Account {
+  id                String  @id @default(cuid())
+  userId            String
+  type              String  // "oauth" | "email"
+  provider          String  // "google" | "github" | "credentials"
+  providerAccountId String
+  refresh_token     String?
+  access_token      String?
+  expires_at        Int?
+  token_type        String?
+  scope             String?
+  id_token          String?
+  session_state     String?
+  
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  
+  @@unique([provider, providerAccountId])
+  @@index([userId])
+}
+```
+````
+
+---
+
+### Validation Checklist
+````markdown
+REQUIREMENTS COMPONENT QUALITY CHECKLIST:
+
+FUNCTIONAL REQUIREMENTS:
+□ All user actions documented (what user can DO)
+□ Complete user journey (registration → login → logout)
+□ 5-10 functional requirements specified
+□ Each requirement has sub-requirements (detailed)
+
+TECHNICAL REQUIREMENTS:
+□ Technology choices specified (NextAuth.js v5, bcrypt, etc.)
+□ Version numbers included (where critical)
+□ Explains WHY (not just WHAT)
+□ References constitutional mandates
+
+NON-FUNCTIONAL REQUIREMENTS:
+□ Performance targets specified (< 500ms, etc.)
+□ Security compliance documented (OWASP, Commandments)
+□ Accessibility requirements (WCAG AA)
+□ Scalability limits defined (concurrent users, data volume)
+
+EDGE CASES:
+□ 10+ edge cases identified and handled
+□ Security edge cases included (SQL injection, etc.)
+□ User behavior edge cases (multiple attempts, etc.)
+□ System failure edge cases (email down, database timeout)
+
+DATA REQUIREMENTS:
+□ Complete Prisma schema provided
+□ Relationships defined (foreign keys)
+□ Indexes specified (performance optimization)
+□ Constraints documented (unique, nullable)
+□ Schema notes explain design decisions
+
+GRADING:
+All 5 sections complete with detail: ⭐⭐⭐⭐⭐ Excellent
+4 sections complete: ⭐⭐⭐⭐ Good
+3 sections complete: ⭐⭐⭐ Acceptable
+<3 sections: ⭐⭐ Insufficient
+````
+
+---
+
+## 🛡️ COMPONENT 5: SECURITY MANDATES
+
+### Purpose
+
+Inject constitutional security and quality requirements directly into the prompt to ensure AI generates compliant code.
+
+### Structure
+````markdown
+COMPONENT 5: SECURITY MANDATES (Constitutional Requirements)
+────────────────────────────────────────────────────────
+
+Source: STRATEG CONSTITUTION v2.0
+- Article I, Law #3 (Security First)
+- Article VI, Strategic Commandments
+
+MANDATORY SECURITY REQUIREMENTS:
+
+[For each relevant commandment:]
+
+COMMANDMENT [NUMBER]: [NAME]
+
+Mandate:
+[Specific requirement from constitution]
+
+Rationale:
+[Why this is required - business/security justification]
+
+Implementation:
+```[language]
+[Code example showing HOW to implement]
+```
+
+Violations Prohibited:
+❌ [What NOT to do - example 1]
+❌ [What NOT to do - example 2]
+
+OWASP Reference: [A0X:2021 - Category Name]
+
+────────────────────────────────────────────────────────
+
+CONSTITUTIONAL VALIDATION CHECKLIST:
+
+Before considering this implementation complete, verify:
+□ [Checkpoint 1]
+□ [Checkpoint 2]
+□ [Checkpoint 3]
+...
+
+FAILURE TO COMPLY:
+Violating these mandates is a CRITICAL constitutional violation.
+Code that violates security mandates will NOT pass evaluation phase.
+````
+
+---
+
+### Which Commandments to Include?
+
+**Decision Tree:**
+````
+FEATURE = Authentication?
+├─ Commandment I: Input Validation (email, password)
+├─ Commandment III: Password Security (bcrypt)
+├─ Commandment IV: Session Management
+├─ Commandment V: Rate Limiting
+└─ Commandment VIII: Error Handling (no user enumeration)
+
+FEATURE = API Endpoint?
+├─ Commandment I: Input Validation (Zod)
+├─ Commandment V: Rate Limiting
+├─ Commandment VI: Access Control (authorization)
+└─ Commandment VIII: Error Handling
+
+FEATURE = Form/UI?
+├─ Commandment I: Input Validation (client + server)
+├─ Commandment II: Output Encoding (XSS prevention)
+├─ Commandment IX: Accessibility (WCAG AA)
+└─ Commandment X: Documentation (form labels)
+
+FEATURE = Data Handling?
+├─ Commandment I: Input Validation
+├─ Commandment VII: Data Protection (encryption, GDPR)
+└─ Commandment VIII: Error Handling (no PII in logs)
+
+FEATURE = File Upload?
+├─ Commandment I: Input Validation (file type, size)
+├─ Commandment VII: Data Protection (virus scan, secure storage)
+└─ Commandment VIII: Error Handling
+
+ALL FEATURES (Always Include):
+└─ Commandment VIII: Error Handling (generic errors, logging)
+````
+
+---
+
+### Example - Authentication Feature
+````markdown
+COMPONENT 5: SECURITY MANDATES (Constitutional Requirements)
+────────────────────────────────────────────────────────
+
+Source: STRATEG CONSTITUTION v2.0
+- Article I, Law #3 (Security First)
+- Article VI, Strategic Commandments #1, 3, 4, 5, 8
+
+MANDATORY SECURITY REQUIREMENTS:
+
+────────────────────────────────────────────────────────
+
+COMMANDMENT I: INPUT VALIDATION
+
+Mandate:
+ALL user input MUST be validated on the server side using Zod schemas.
+Client-side validation is for UX only, never for security.
+
+Rationale:
+90% of security vulnerabilities stem from improper input validation.
+Client-side validation can be bypassed by attackers.
+
+Implementation:
+```typescript
+import { z } from 'zod'
+
+const loginSchema = z.object({
+  email: z.string().email('Invalid email format'),
+  password: z.string().min(8, 'Password must be at least 8 characters')
+})
+
+export async function POST(request: Request) {
+  const body = await request.json()
+  
+  // Validate input
+  const result = loginSchema.safeParse(body)
+  
+  if (!result.success) {
+    return Response.json(
+      { error: 'Invalid input', details: result.error.format() },
+      { status: 400 }
+    )
+  }
+  
+  // Proceed with validated data
+  const { email, password } = result.data
+  // ...
+}
+```
+
+Violations Prohibited:
+❌ Trusting client-side validation alone
+❌ No server-side validation
+❌ String concatenation in SQL queries (use Prisma)
+
+OWASP Reference: A03:2021 - Injection
+
+────────────────────────────────────────────────────────
+
+COMMANDMENT III: PASSWORD SECURITY
+
+Mandate:
+Passwords MUST be hashed with bcrypt (cost factor 12 minimum) or Argon2.
+NEVER store passwords in plaintext, not even temporarily.
+
+Rationale:
+Plaintext passwords expose ALL accounts in event of database breach.
+Average breach cost: $4.5M (IBM 2023).
+
+Implementation:
+```typescript
+import bcrypt from 'bcrypt'
+
+// Registration
+const hashedPassword = await bcrypt.hash(password, 12)
+await prisma.user.create({
+  data: { email, password: hashedPassword }
+})
+
+// Login
+const user = await prisma.user.findUnique({ where: { email } })
+const valid = await bcrypt.compare(password, user.password)
+```
+
+Violations Prohibited:
+❌ Storing plaintext passwords
+❌ Using MD5, SHA-1, or SHA-256 for passwords
+❌ bcrypt cost factor < 12
+❌ Logging passwords (even hashed)
+
+OWASP Reference: A02:2021 - Cryptographic Failures
+
+────────────────────────────────────────────────────────
+
+COMMANDMENT IV: SESSION MANAGEMENT
+
+Mandate:
+Sessions MUST be database-backed (not JWT for sensitive apps).
+Cookies MUST be HTTP-only, Secure, and SameSite=Strict.
+Session timeout: 7 days maximum.
+
+Rationale:
+JWT sessions cannot be revoked (logout doesn't work).
+HTTP-only cookies prevent XSS theft.
+SameSite=Strict prevents CSRF attacks.
+
+Implementation:
+```typescript
+import NextAuth from 'next-auth'
+import { PrismaAdapter } from '@auth/prisma-adapter'
+
+export const { handlers, auth } = NextAuth({
+  adapter: PrismaAdapter(prisma),
+  session: {
+    strategy: 'database',  // NOT "jwt"
+    maxAge: 7 * 24 * 60 * 60  // 7 days (constitutional maximum)
+  },
+  cookies: {
+    sessionToken: {
+      options: {
+        httpOnly: true,      // JavaScript cannot access
+        sameSite: 'strict',  // CSRF protection
+        secure: process.env.NODE_ENV === 'production'  // HTTPS only
+      }
+    }
+  }
+})
+```
+
+Violations Prohibited:
+❌ localStorage for sessions (vulnerable to XSS)
+❌ JWT for sensitive applications (cannot revoke)
+❌ No CSRF protection
+❌ Session in URL parameters
+
+OWASP Reference: A07:2021 - Identification and Authentication Failures
+
+────────────────────────────────────────────────────────
+
+COMMANDMENT V: RATE LIMITING
+
+Mandate:
+Authentication endpoints MUST be rate limited:
+- Login: 5 attempts per 15 minutes per IP
+- Registration: 3 attempts per hour per IP
+
+Rationale:
+Without rate limiting, attackers can brute force passwords.
+2021 incident: 47 accounts compromised in 2 hours (no rate limiting).
+
+Implementation:
+```typescript
+import { Ratelimit } from '@upstash/ratelimit'
+import { Redis } from '@upstash/redis'
+
+const rateLimit = new Ratelimit({
+  redis: new Redis({
+    url: process.env.UPSTASH_REDIS_REST_URL!,
+    token: process.env.UPSTASH_REDIS_REST_TOKEN!
+  }),
+  limiter: Ratelimit.slidingWindow(5, '15 m')
+})
+
+export async function POST(request: Request) {
+  const ip = request.headers.get('x-forwarded-for') || 'unknown'
+  const { success, reset } = await rateLimit.limit(ip)
+  
+  if (!success) {
+    return Response.json(
+      { error: 'Too many attempts. Try again later.' },
+      { 
+        status: 429,
+        headers: { 'Retry-After': Math.ceil((reset - Date.now()) / 1000).toString() }
+      }
+    )
+  }
+  
+  // Proceed with login
+}
+```
+
+Violations Prohibited:
+❌ No rate limiting on authentication
+❌ Client-side rate limiting only
+❌ Same limit for all operations
+
+OWASP Reference: A07:2021 - Identification and Authentication Failures
+
+────────────────────────────────────────────────────────
+
+COMMANDMENT VIII: ERROR HANDLING
+
+Mandate:
+Error messages to users MUST be generic (no system details exposed).
+Detailed errors logged server-side only.
+No user enumeration (same error for "user not found" and "wrong password").
+
+Rationale:
+Detailed errors help attackers (reveal system structure, database schema).
+User enumeration allows discovering registered emails.
+
+Implementation:
+```typescript
+export async function POST(request: Request) {
+  try {
+    const { email, password } = await request.json()
+    
+    const user = await prisma.user.findUnique({ where: { email } })
+    
+    if (!user || !await bcrypt.compare(password, user.password)) {
+      // Generic error (no user enumeration)
+      return Response.json(
+        { error: 'Invalid credentials' },  // Same for both cases
+        { status: 401 }
+      )
+    }
+    
+    // Success...
+    
+  } catch (error) {
+    // Log full details server-side
+    console.error('Login error:', error)
+    
+    // Generic error to user
+    return Response.json(
+      { error: 'An error occurred. Please try again later.' },
+      { status: 500 }
+    )
+  }
+}
+```
+
+Violations Prohibited:
+❌ Exposing stack traces to users
+❌ Different messages: "User not found" vs "Wrong password"
+❌ Database error details in response
+❌ PII in error logs
+
+OWASP Reference: A05:2021 - Security Misconfiguration
+
+────────────────────────────────────────────────────────
+
+CONSTITUTIONAL VALIDATION CHECKLIST:
+
+Before considering this authentication implementation complete:
+
+□ Passwords hashed with bcrypt (cost ≥ 12)
+□ Sessions stored in database (not JWT)
+□ HTTP-only cookies configured (httpOnly: true)
+□ CSRF protection enabled (NextAuth.js default)
+□ Rate limiting implemented (5 attempts / 15 min)
+□ Input validation (Zod schemas on all endpoints)
+□ Generic error messages (no user enumeration)
+□ No PII logged (no passwords, even hashed)
+□ HTTPS enforced in production
+
+FAILURE TO COMPLY:
+
+Violating these mandates is a CRITICAL constitutional violation.
+
+This code will NOT pass Phase E (Evaluation & Testing).
+Security vulnerabilities will be flagged during OWASP Top 10 audit.
+
+I CANNOT generate code that violates these mandates.
+This is non-negotiable (Article I, Law #3: Security First).
+````
+
+---
+
+### Validation Checklist
+````markdown
+SECURITY MANDATES COMPONENT QUALITY CHECKLIST:
+
+□ All relevant commandments included (3-6 commandments typical)
+□ Each mandate has clear requirement statement
+□ Rationale provided (WHY it matters)
+□ Implementation code example provided (HOW to do it)
+□ Violations explicitly prohibited (WHAT NOT to do)
+□ OWASP reference included (traceability)
+□ Constitutional validation checklist present
+□ Failure consequences stated clearly
+
+GRADING:
+8/8 checked: ⭐⭐⭐⭐⭐ Comprehensive security mandate
+6-7 checked: ⭐⭐⭐⭐ Good security coverage
+4-5 checked: ⭐⭐⭐ Acceptable
+<4 checked: ⭐⭐ Insufficient security guidance
+````
+
+---
+
+**[TO BE CONTINUED - Components 6-7 in next response...]**
+
+**Current Progress: 5/7 components complete**
+
+Should I continue with Components 6-7 (final components)? 🚀
