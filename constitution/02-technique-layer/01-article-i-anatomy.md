@@ -2003,8 +2003,685 @@ GRADING:
 
 ---
 
-**[TO BE CONTINUED - Components 6-7 in next response...]**
+npx prisma migrate dev --name add-auth-models
+````
 
-**Current Progress: 5/7 components complete**
+4. VALIDATION CHECKLIST:
+   (See Validation Checklist section below)
 
-Should I continue with Components 6-7 (final components)? 🚀
+5. ENVIRONMENT SETUP INSTRUCTIONS:
+   (See Setup Instructions section below)
+
+6. NEXT STEPS GUIDANCE:
+   (See Next Steps section below)
+````
+
+---
+
+### Code Output Format
+
+**Purpose:** Consistent, copy-paste-ready code formatting
+
+**Example:**
+````markdown
+CODE OUTPUT FORMAT:
+
+For each file, use this exact format:
+```typescript
+// ============================================
+// FILE: lib/auth.ts
+// ============================================
+
+import NextAuth from "next-auth"
+import { PrismaAdapter } from "@auth/prisma-adapter"
+import { prisma } from "@/lib/db"
+import type { NextAuthConfig } from "next-auth"
+
+// TODO (Phase 2): Import providers
+// import GoogleProvider from "next-auth/providers/google"
+// import CredentialsProvider from "next-auth/providers/credentials"
+
+/**
+ * NextAuth.js v5 configuration
+ * Constitutional: Database sessions, secure cookies, CSRF protection
+ */
+export const { handlers, auth, signIn, signOut } = NextAuth({
+  adapter: PrismaAdapter(prisma),
+  
+  session: {
+    strategy: "database", // Constitutional: DB sessions (not JWT)
+    maxAge: 7 * 24 * 60 * 60, // 7 days (constitutional maximum)
+  },
+  
+  // TODO (Phase 2): Add providers array
+  providers: [],
+  
+  // TODO (Phase 2): Add callbacks (session, jwt, etc.)
+  callbacks: {},
+  
+  // TODO (Phase 3): Add events for logging
+  events: {},
+})
+
+
+// ============================================
+// FILE: app/api/auth/[...nextauth]/route.ts
+// ============================================
+
+import { handlers } from "@/lib/auth"
+
+/**
+ * NextAuth.js API route handler
+ * Handles: /api/auth/signin, /api/auth/signout, /api/auth/callback/[provider]
+ */
+export const { GET, POST } = handlers
+
+
+// ============================================
+// FILE: types/auth.ts
+// ============================================
+
+import type { User as PrismaUser } from "@prisma/client"
+
+/**
+ * Extended User type with session information
+ */
+export interface AuthUser extends PrismaUser {
+  // Additional fields can be added here
+}
+
+/**
+ * Session type
+ */
+export interface AuthSession {
+  user: AuthUser
+  expires: string
+}
+
+
+// ============================================
+// FILE: prisma/schema.prisma (additions)
+// ============================================
+
+// Add these models to your existing schema.prisma
+
+model User {
+  id            String    @id @default(cuid())
+  email         String    @unique
+  password      String?   // Nullable (OAuth users have no password)
+  name          String
+  emailVerified DateTime?
+  image         String?
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+  
+  sessions      Session[]
+  accounts      Account[]
+  
+  @@index([email])
+}
+
+model Session {
+  id           String   @id @default(cuid())
+  sessionToken String   @unique
+  userId       String
+  expires      DateTime
+  createdAt    DateTime @default(now())
+  
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  
+  @@index([userId])
+  @@index([sessionToken])
+}
+
+model Account {
+  id                String  @id @default(cuid())
+  userId            String
+  type              String
+  provider          String
+  providerAccountId String
+  refresh_token     String?
+  access_token      String?
+  expires_at        Int?
+  token_type        String?
+  scope             String?
+  id_token          String?
+  session_state     String?
+  
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  
+  @@unique([provider, providerAccountId])
+  @@index([userId])
+}
+
+
+// ============================================
+// FILE: .env.example
+// ============================================
+
+# Database Connection
+DATABASE_URL="postgresql://user:password@host:5432/database"
+
+# NextAuth.js Configuration
+NEXTAUTH_URL="http://localhost:3000"
+NEXTAUTH_SECRET=""  # Generate with: openssl rand -base64 32
+
+# Google OAuth (get from: https://console.cloud.google.com)
+GOOGLE_CLIENT_ID=""
+GOOGLE_CLIENT_SECRET=""
+
+# Upstash Redis (for rate limiting)
+UPSTASH_REDIS_REST_URL=""
+UPSTASH_REDIS_REST_TOKEN=""
+```
+````
+
+---
+
+### Validation Checklist
+
+**Purpose:** User can verify output is correct before proceeding
+
+**Example:**
+````markdown
+VALIDATION CHECKLIST:
+
+User should verify these before proceeding to Phase 2:
+
+FILE STRUCTURE:
+□ All 5 files created in correct locations
+□ Files match expected paths exactly
+□ No extra files created (scaffolding only)
+
+TYPESCRIPT COMPILATION:
+□ Run: npm run type-check
+□ Expected: ✓ No errors (warnings acceptable)
+□ If errors: Check for missing imports or typos
+
+PRISMA SCHEMA:
+□ Run: npx prisma format (formats schema)
+□ Run: npx prisma validate (validates syntax)
+□ Expected: ✓ Schema is valid
+
+PRISMA MIGRATION:
+□ Run: npx prisma migrate dev --name add-auth-models
+□ Expected: ✓ Migration created and applied
+□ Verify: Database tables created (User, Session, Account)
+□ Tool: npx prisma studio (browse database tables)
+
+IMPORTS:
+□ No red squiggles in VS Code (all imports resolve)
+□ Run: npm run lint (if configured)
+□ Expected: ✓ No import errors
+
+ENVIRONMENT VARIABLES:
+□ .env.example created
+□ .env.example copied to .env.local
+□ All required variables documented
+□ User prompted to fill in actual values
+
+PROJECT STRUCTURE:
+□ Follows Next.js 15 App Router conventions
+□ app/api/auth/[...nextauth]/ directory structure correct
+□ lib/ directory exists with auth.ts
+□ types/ directory exists (if used)
+
+READY FOR PHASE 2:
+□ All above checks passed
+□ Environment variables configured (user action required)
+□ No errors in terminal
+□ Can proceed to implementation phase
+````
+
+---
+
+### Setup Instructions
+
+**Purpose:** Guide user through post-generation configuration
+
+**Example:**
+````markdown
+SETUP INSTRUCTIONS (User Action Required):
+
+After receiving the scaffolding code, complete these steps:
+
+STEP 1: COPY ENVIRONMENT VARIABLES
+```bash
+# Copy the example file
+cp .env.example .env.local
+```
+
+STEP 2: GENERATE NEXTAUTH SECRET
+```bash
+# Generate a secure random secret
+openssl rand -base64 32
+```
+
+Copy the output and paste into .env.local:
+```env
+NEXTAUTH_SECRET="paste-generated-secret-here"
+```
+
+STEP 3: CONFIGURE GOOGLE OAUTH
+
+1. Go to: https://console.cloud.google.com
+2. Create new project (or select existing)
+3. Enable Google+ API
+4. Create OAuth 2.0 credentials
+5. Add authorized redirect URI:
+   - http://localhost:3000/api/auth/callback/google (development)
+   - https://yourdomain.com/api/auth/callback/google (production)
+6. Copy Client ID and Client Secret to .env.local:
+```env
+GOOGLE_CLIENT_ID="your-client-id.apps.googleusercontent.com"
+GOOGLE_CLIENT_SECRET="your-client-secret"
+```
+
+STEP 4: SET UP UPSTASH REDIS (Rate Limiting)
+
+1. Go to: https://upstash.com
+2. Create free account
+3. Create new Redis database
+4. Copy REST URL and REST Token to .env.local:
+```env
+UPSTASH_REDIS_REST_URL="https://your-redis.upstash.io"
+UPSTASH_REDIS_REST_TOKEN="your-token-here"
+```
+
+STEP 5: RUN DATABASE MIGRATION
+```bash
+# Apply schema changes to database
+npx prisma migrate dev --name add-auth-models
+
+# Expected output:
+# ✓ Migration applied: add-auth-models
+```
+
+STEP 6: VERIFY EVERYTHING WORKS
+```bash
+# Start development server
+npm run dev
+
+# Expected: Server starts on http://localhost:3000
+```
+
+Visit: http://localhost:3000/api/auth/signin
+Expected: See NextAuth.js sign-in page (even if basic)
+
+STEP 7: READY FOR PHASE 2
+
+If all above steps successful, you're ready to request:
+"Proceed to Phase 2: Implementation"
+````
+
+---
+
+### Next Steps
+
+**Purpose:** Clear path forward after completing current phase
+
+**Example:**
+````markdown
+NEXT STEPS:
+
+After validating scaffolding and completing setup:
+
+CURRENT STATUS:
+✓ Phase 1 (Scaffolding) - COMPLETE
+  - File structure created
+  - TypeScript interfaces defined
+  - Prisma schema updated
+  - Environment configured
+
+NEXT PHASE:
+
+Request: "Proceed to Phase 2: Implementation"
+
+Phase 2 will add:
+- Complete NextAuth.js configuration (not just skeleton)
+- Google OAuth provider setup
+- Credentials provider (email/password)
+- Password hashing with bcrypt (cost 12)
+- Session callbacks
+- Type-safe session data
+
+Estimated time: 25 minutes
+
+SUBSEQUENT PHASES:
+
+Phase 3: Security Hardening (15 minutes)
+- Rate limiting implementation
+- Input validation (Zod schemas)
+- CSRF protection verification
+- Error handling
+
+Phase 4: UI & Testing (25 minutes)
+- Login form component
+- Registration form component
+- Logout button
+- Manual testing checklist
+
+Phase 5: Evaluation (30 minutes)
+- OWASP Top 10 audit
+- WCAG AA accessibility check
+- Performance testing (Lighthouse)
+- Constitutional compliance verification
+
+TOTAL ESTIMATED TIME: ~2 hours (all phases)
+
+IF YOU ENCOUNTER ISSUES:
+
+Return here and describe the problem:
+- "Error: bcrypt not found" → I'll provide troubleshooting
+- "Google OAuth callback fails" → I'll debug configuration
+- "TypeScript errors" → I'll review and fix
+
+Constitutional Guarantee (Law #2: Human Sovereignty):
+You're in control. Request changes, ask questions, or pause anytime.
+MVCA adapts to your pace and needs.
+
+OPTIONAL ENHANCEMENTS (After Core Complete):
+
+- GitHub OAuth (add provider)
+- Email verification (separate flow)
+- 2FA/MFA (separate feature)
+- Account recovery (security questions)
+- Password reset (separate flow)
+
+These can be added after core authentication is working.
+````
+
+---
+
+### Complete Example - Authentication
+````markdown
+COMPONENT 7: OUTPUT FORMAT & VALIDATION
+────────────────────────────────────────────────────────
+
+DELIVERABLES:
+
+After generating this scaffolding, I will provide:
+
+1. FILE STRUCTURE SUMMARY:
+````
+   ✓ lib/auth.ts (NextAuth configuration scaffold)
+   ✓ app/api/auth/[...nextauth]/route.ts (API route handlers)
+   ✓ types/auth.ts (TypeScript interfaces)
+   ✓ prisma/schema.prisma (additions - User, Session, Account models)
+   ✓ .env.example (environment variable template)
+````
+
+2. COMPLETE CODE FOR EACH FILE:
+   Each file will be provided in this format:
+````
+   // ============================================
+   // FILE: path/to/file.ext
+   // ============================================
+   [Complete code contents with comments]
+   
+
+DATABASE MIGRATION COMMAND:
+
+bash   npx prisma migrate dev --name add-auth-models
+
+VALIDATION CHECKLIST (below)
+SETUP INSTRUCTIONS (below)
+NEXT STEPS GUIDANCE (below)
+
+VALIDATION CHECKLIST:
+Before proceeding to Phase 2, verify:
+FILE STRUCTURE:
+□ All 5 files created in correct locations
+□ lib/auth.ts exists and exports auth functions
+□ app/api/auth/[...nextauth]/route.ts exists
+□ types/auth.ts exists with interfaces
+□ .env.example created
+TYPESCRIPT COMPILATION:
+□ Run: npm run type-check
+□ Expected: ✓ No errors
+□ If errors: Missing imports or type definitions
+PRISMA SCHEMA:
+□ Run: npx prisma format
+□ Run: npx prisma validate
+□ Expected: ✓ Schema is valid
+□ User, Session, Account models present
+DATABASE MIGRATION:
+□ Run: npx prisma migrate dev --name add-auth-models
+□ Expected: ✓ Migration created and applied
+□ Verify tables: npx prisma studio (browse tables)
+IMPORTS & DEPENDENCIES:
+□ No red squiggles in VS Code
+□ All @ alias imports resolve
+□ next-auth installed (package.json)
+□ @auth/prisma-adapter installed
+ENVIRONMENT VARIABLES:
+□ .env.example exists with all required variables
+□ .env.example copied to .env.local (user action)
+□ NEXTAUTH_SECRET generated (user action)
+□ Google OAuth credentials obtained (user action)
+□ Upstash Redis credentials obtained (user action)
+SETUP INSTRUCTIONS (User Action Required):
+STEP 1: COPY ENVIRONMENT FILE
+bashcp .env.example .env.local
+STEP 2: GENERATE NEXTAUTH SECRET
+bashopenssl rand -base64 32
+Paste result into .env.local as NEXTAUTH_SECRET
+STEP 3: GET GOOGLE OAUTH CREDENTIALS
+
+Visit: https://console.cloud.google.com
+Create project → Enable Google+ API
+Create OAuth 2.0 credentials
+Add redirect URI: http://localhost:3000/api/auth/callback/google
+Copy Client ID and Secret to .env.local
+
+STEP 4: SET UP UPSTASH REDIS
+
+Visit: https://upstash.com
+Create free Redis database
+Copy REST URL and Token to .env.local
+
+STEP 5: RUN MIGRATION
+bashnpx prisma migrate dev --name add-auth-models
+STEP 6: START DEV SERVER
+bashnpm run dev
+````
+
+Visit: http://localhost:3000/api/auth/signin
+Expected: NextAuth.js sign-in page appears
+
+NEXT STEPS:
+
+CURRENT STATUS: Phase 1 (Scaffolding) - COMPLETE ✓
+
+READY FOR: Phase 2 (Implementation)
+
+Request: "Proceed to Phase 2: Implementation"
+
+Phase 2 will add:
+- Complete NextAuth configuration
+- Google OAuth provider
+- Credentials provider + bcrypt
+- Session callbacks
+- Type-safe session
+
+Estimated: 25 minutes
+
+SUBSEQUENT PHASES:
+- Phase 3: Security (15 min) - Rate limiting, validation
+- Phase 4: UI & Testing (25 min) - Login/register forms
+- Phase 5: Evaluation (30 min) - OWASP audit, WCAG check
+
+TOTAL TIME: ~2 hours for complete authentication system
+
+TROUBLESHOOTING:
+
+If you encounter errors, return here with:
+- Exact error message
+- Which step failed
+- Output of npm run type-check
+
+I'll provide debugging assistance and fixes.
+
+CONSTITUTIONAL GUARANTEE:
+You control the pace. Ask questions, request changes, or pause anytime.
+(Article I, Law #2: Human Sovereignty)
+````
+
+---
+
+### Validation Checklist
+````markdown
+OUTPUT FORMAT COMPONENT QUALITY CHECKLIST:
+
+DELIVERABLES:
+□ Complete file list provided (with paths)
+□ Output format specified (code block structure)
+□ Migration commands included (if database changes)
+
+VALIDATION CHECKLIST:
+□ 5-10 verification steps provided
+□ Each step has clear pass/fail criteria
+□ Commands provided (npm run type-check, etc.)
+□ Expected outputs specified
+
+SETUP INSTRUCTIONS:
+□ Step-by-step user actions documented
+□ Commands provided (copy-paste ready)
+□ External service setup explained (OAuth, etc.)
+□ Environment variable configuration detailed
+
+NEXT STEPS:
+□ Current status clearly stated
+□ Next phase identified
+□ What next phase will add (preview)
+□ Estimated time for next phase
+□ How to proceed (exact request to make)
+
+TROUBLESHOOTING:
+□ Common errors anticipated
+□ Debugging steps provided
+□ How to get help explained
+
+GRADING:
+All 5 sections complete: ⭐⭐⭐⭐⭐ Excellent
+4 sections complete: ⭐⭐⭐⭐ Good
+3 sections complete: ⭐⭐⭐ Acceptable
+<3 sections: ⭐⭐ Insufficient
+````
+
+---
+
+## 🎯 ARTICLE I CONCLUSION
+
+### The 7-Component Structure Summary
+````
+═══════════════════════════════════════════════════════════
+CONSTITUTIONAL PROMPT ANATOMY
+═══════════════════════════════════════════════════════════
+
+COMPONENT 1: PERSONA ASSIGNMENT
+Purpose: Define AI's expertise and role
+Key: Set appropriate expectations for output quality
+
+COMPONENT 2: CONTEXT INJECTION
+Purpose: Provide comprehensive project context
+Key: 5-layer stack (Identity, Business, Technical, Feature, Constraints)
+
+COMPONENT 3: TASK DEFINITION
+Purpose: Define exact scope and success criteria
+Key: Clear IN/OUT scope boundaries prevent scope creep
+
+COMPONENT 4: REQUIREMENTS SPECIFICATION
+Purpose: Transform vague descriptions into precise requirements
+Key: Functional + Technical + Non-Functional + Edge Cases + Data
+
+COMPONENT 5: SECURITY MANDATES
+Purpose: Inject constitutional security requirements
+Key: OWASP Top 10 + Strategic Commandments I-X
+
+COMPONENT 6: META-INSTRUCTIONS
+Purpose: Guide AI's thinking process
+Key: Thinking Process + Constraints + Best Practices + Dependencies
+
+COMPONENT 7: OUTPUT FORMAT & VALIDATION
+Purpose: Define deliverables and verification method
+Key: Explicit file list + Validation checklist + Setup instructions
+
+═══════════════════════════════════════════════════════════
+````
+
+---
+
+### Quality Metrics
+````markdown
+CONSTITUTIONAL PROMPT QUALITY SCORE:
+
+Component 1 (Persona):           /10
+Component 2 (Context):            /15
+Component 3 (Task):               /10
+Component 4 (Requirements):       /20
+Component 5 (Security):           /20
+Component 6 (Meta-Instructions):  /15
+Component 7 (Output):             /10
+
+TOTAL SCORE:                     /100
+
+GRADING:
+90-100: ⭐⭐⭐⭐⭐ Constitutional Excellence
+75-89:  ⭐⭐⭐⭐ High Quality
+60-74:  ⭐⭐⭐ Acceptable
+45-59:  ⭐⭐ Needs Improvement
+<45:    ⭐ Non-Constitutional (rework required)
+````
+
+---
+
+### When to Use This Structure
+````
+ALWAYS USE (Mandatory):
+- New feature implementation
+- Complex refactoring
+- Security-sensitive code
+- Production deployments
+
+RECOMMENDED (Strongly suggested):
+- Bug fixes affecting multiple files
+- API endpoint creation
+- Database schema changes
+- Authentication/authorization features
+
+OPTIONAL (Can simplify):
+- Minor UI tweaks (single component)
+- Documentation updates
+- Configuration changes (single file)
+- Simple bug fixes (one-line change)
+
+NEVER NEEDED:
+- Factual questions ("What is bcrypt?")
+- Explanatory requests ("Explain JWT")
+- Non-coding tasks
+````
+
+---
+
+## 📚 RELATED ARTICLES
+
+| Article | Purpose | Relationship to Anatomy |
+|---------|---------|------------------------|
+| **Article II: Twelve Patterns** | Prompt patterns | Patterns use 7-component structure |
+| **Article III: Context Stack** | Context details | Component 2 expands on this |
+| **Segment 1, Article VI** | Strategic Commandments | Component 5 injects these |
+| **Segment 1, Article IV** | Constitutional Protocols | Protocol 5 uses this structure |
+
+---
+
+**Previous:** [← Segment 2 README](./README.md)  
+**Next:** [Article II: Twelve Patterns →](./02-article-ii-twelve-patterns.md)
+
+---
+
+**Last Updated:** February 7, 2026  
+**Constitutional Version:** 2.0.0  
+**Status:** ✅ Ratified and In Force
+
+**Motto:** *"Structure Breeds Excellence - The 7 Components Generate Constitutional Code"*
