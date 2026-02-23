@@ -986,8 +986,976 @@ END OF IMPLEMENTATION PROMPT
 
 ---
 
-**[CONTINUING WITH REMAINING PATTERNS IN NEXT RESPONSE...]**
+## ✏️ PATTERN #3: DELTA EDITING
 
-**Current Progress:** 2/12 patterns documented
+### Purpose
 
-Should I continue with Patterns #3-12? 🚀
+Make surgical, precise changes to existing code without rewriting entire files. Used for modifications, updates, and targeted improvements to specific functions or sections.
+
+### When to Use
+````
+✅ USE DELTA EDITING WHEN:
+- Modifying existing code (not creating new)
+- Changes are localized (specific functions/sections)
+- Want to preserve most of existing code
+- Need to see exact before/after changes
+- Multiple small changes across file
+
+✅ EXAMPLES:
+- "Change login rate limit from 5 to 10 attempts"
+- "Update User model to include 'bio' field"
+- "Modify email validation to allow '+' character"
+- "Change button color from blue to green"
+
+❌ DON'T USE DELTA EDITING WHEN:
+- Creating entirely new files (use Pattern #1 or #2)
+- Refactoring entire file structure (use Pattern #6)
+- Changes are very minor (single character/word)
+- User wants to see complete new version
+````
+
+---
+
+### Pattern Structure
+
+**7-Component Adaptation:**
+````markdown
+COMPONENT 1: PERSONA
+"You are a senior developer experienced in code modification..."
+Focus: Precision, minimal disruption, maintain code quality
+
+COMPONENT 2: CONTEXT
+Include: Layer 3 (Technical) + current code state
+Provide: EXACT current code that needs modification
+
+COMPONENT 3: TASK
+Task: "Make SPECIFIC changes to existing code (delta editing)"
+IN SCOPE:
+- Specific changes requested
+- Maintain surrounding code unchanged
+- Preserve code style and conventions
+- Update related code if necessary (imports, types, etc.)
+
+OUT OF SCOPE:
+- Rewriting entire file
+- Refactoring unrelated code
+- Changing architectural patterns
+
+SUCCESS CRITERIA:
+- Exact changes made as requested
+- Surrounding code unchanged
+- TypeScript still compiles
+- Functionality maintained (or improved as requested)
+
+COMPONENT 4: REQUIREMENTS
+CHANGE SPECIFICATION:
+- CURRENT: [Show exact current code]
+- CHANGE TO: [Describe specific change]
+- REASON: [Why this change is needed]
+
+COMPONENT 5: SECURITY MANDATES
+Include: Only if change affects security-sensitive code
+
+COMPONENT 6: META-INSTRUCTIONS
+THINKING PROCESS: "Identify exact location → Make precise change → Verify no breaking changes"
+CONSTRAINTS: "Change ONLY what's requested, preserve everything else"
+
+COMPONENT 7: OUTPUT
+DELIVERABLES: Before/After comparison (diff format)
+VALIDATION: Checklist for testing change
+````
+
+---
+
+### Complete Example - Modify Rate Limit
+````markdown
+═══════════════════════════════════════════════════════════
+CONSTITUTIONAL PROMPT: MODIFY RATE LIMIT THRESHOLD
+Pattern #3: Delta Editing
+═══════════════════════════════════════════════════════════
+
+COMPONENT 1: PERSONA ASSIGNMENT
+────────────────────────────────────────────────────────
+
+You are a senior developer with expertise in API rate limiting,
+security configurations, and Next.js with 8+ years experience.
+
+Your expertise includes:
+- Rate limiting strategies and thresholds
+- Upstash Redis configuration
+- Security trade-offs (usability vs. protection)
+- Code modification with minimal disruption
+
+You write precise code changes that prioritize:
+1. Accuracy (change exactly what's requested)
+2. Consistency (maintain code style)
+3. Safety (no breaking changes)
+4. Context awareness (update related constants/comments)
+
+COMPONENT 2: CONTEXT INJECTION
+────────────────────────────────────────────────────────
+
+LAYER 3: TECHNICAL CONTEXT
+- Framework: Next.js 15.0.3 (App Router)
+- Language: TypeScript 5.3.3 (strict mode)
+- Rate Limiting: Upstash Redis + @upstash/ratelimit
+
+CURRENT CODE (lib/rate-limit.ts):
+```typescript
+import { Ratelimit } from '@upstash/ratelimit'
+import { Redis } from '@upstash/redis'
+
+const redis = new Redis({
+  url: process.env.UPSTASH_REDIS_REST_URL!,
+  token: process.env.UPSTASH_REDIS_REST_TOKEN!
+})
+
+/**
+ * Rate limiter for login attempts
+ * Constitutional: Commandment V (5 attempts per 15 minutes)
+ */
+export const loginRateLimit = new Ratelimit({
+  redis,
+  limiter: Ratelimit.slidingWindow(5, '15 m'), // CURRENT: 5 attempts
+  analytics: true,
+  prefix: 'ratelimit:login'
+})
+
+/**
+ * Rate limiter for registration
+ * Constitutional: Commandment V (3 attempts per hour)
+ */
+export const registerRateLimit = new Ratelimit({
+  redis,
+  limiter: Ratelimit.slidingWindow(3, '1 h'),
+  analytics: true,
+  prefix: 'ratelimit:register'
+})
+```
+
+COMPONENT 3: TASK DEFINITION
+────────────────────────────────────────────────────────
+
+TASK: Modify login rate limit from 5 to 10 attempts per 15 minutes
+
+SCOPE:
+
+IN SCOPE (Specific Changes):
+- Change loginRateLimit: 5 → 10 attempts
+- Update JSDoc comment to reflect new limit
+- Verify registration rate limit unchanged
+
+OUT OF SCOPE:
+- Changing time window (keep 15 minutes)
+- Modifying registration rate limit
+- Restructuring file
+- Adding new rate limiters
+
+SUCCESS CRITERIA:
+- Login rate limit: 10 attempts per 15 minutes
+- Registration rate limit: unchanged (3 per hour)
+- JSDoc comment updated
+- TypeScript compiles
+- No other code changed
+
+REASON FOR CHANGE:
+User feedback indicates 5 attempts too restrictive for legitimate users
+who occasionally mistype passwords. 10 attempts provides better UX
+while still protecting against brute force (OWASP A07 compliant).
+
+COMPONENT 4: REQUIREMENTS SPECIFICATION
+────────────────────────────────────────────────────────
+
+CHANGE SPECIFICATION:
+
+CURRENT:
+```typescript
+limiter: Ratelimit.slidingWindow(5, '15 m'), // 5 attempts
+```
+
+CHANGE TO:
+```typescript
+limiter: Ratelimit.slidingWindow(10, '15 m'), // 10 attempts
+```
+
+CURRENT COMMENT:
+```typescript
+/**
+ * Rate limiter for login attempts
+ * Constitutional: Commandment V (5 attempts per 15 minutes)
+ */
+```
+
+CHANGE TO:
+```typescript
+/**
+ * Rate limiter for login attempts
+ * Constitutional: Commandment V (10 attempts per 15 minutes)
+ * Adjusted from 5 to 10 based on user feedback (legitimate mistyping)
+ */
+```
+
+VERIFY UNCHANGED:
+- Registration rate limit: 3 per hour (DO NOT CHANGE)
+- Time window: 15 minutes (DO NOT CHANGE)
+- Other rate limiters: If any exist, DO NOT CHANGE
+
+COMPONENT 5: SECURITY MANDATES
+────────────────────────────────────────────────────────
+
+COMMANDMENT V: RATE LIMITING
+
+Mandate:
+Rate limiting prevents brute force attacks. Threshold must balance
+security (prevent attacks) vs. usability (allow legitimate errors).
+
+Rationale for 10 attempts:
+- 10 attempts still prevents brute force (very slow attack vector)
+- Legitimate users may mistype 5-7 times (keyboard issues, caps lock)
+- 15-minute lockout provides cooling-off period
+- Still OWASP A07 compliant (authentication failure protection)
+
+Constitutional Validation:
+✓ Rate limiting present (required)
+✓ Threshold reasonable (10 attempts acceptable)
+✓ Time window appropriate (15 minutes sufficient)
+✓ No unlimited attempts (violation would be NO rate limit)
+
+COMPONENT 6: META-INSTRUCTIONS
+────────────────────────────────────────────────────────
+
+THINKING PROCESS:
+
+1. LOCATE CODE:
+   - File: lib/rate-limit.ts
+   - Target: loginRateLimit configuration
+   - Line: limiter: Ratelimit.slidingWindow(5, '15 m')
+
+2. MAKE PRECISE CHANGE:
+   - Change: 5 → 10 (numeric value only)
+   - Verify: Time window '15 m' unchanged
+   - Update: JSDoc comment to reflect new limit
+
+3. VERIFY NO SIDE EFFECTS:
+   - Check: registerRateLimit unchanged
+   - Check: No other rate limiters affected
+   - Check: No type errors introduced
+
+4. VALIDATE CHANGE:
+   - TypeScript compiles (npm run type-check)
+   - Imports still valid
+   - No breaking changes
+
+CONSTRAINTS:
+
+DO NOT:
+❌ Change time window ('15 m' stays)
+❌ Modify registration rate limit
+❌ Refactor entire file
+❌ Add new functionality
+❌ Change variable names
+❌ Modify other configuration
+
+DO:
+✓ Change only the numeric value: 5 → 10
+✓ Update JSDoc comment
+✓ Maintain code style
+✓ Preserve surrounding code exactly
+
+BEST PRACTICES:
+
+- Minimal change (least disruption)
+- Update documentation (comments reflect reality)
+- Preserve formatting (spacing, indentation)
+- No unrelated changes (scope creep)
+
+COMPONENT 7: OUTPUT FORMAT & VALIDATION
+────────────────────────────────────────────────────────
+
+DELIVERABLES:
+
+BEFORE/AFTER DIFF:
+```diff
+// lib/rate-limit.ts
+
+  /**
+   * Rate limiter for login attempts
+-  * Constitutional: Commandment V (5 attempts per 15 minutes)
++  * Constitutional: Commandment V (10 attempts per 15 minutes)
++  * Adjusted from 5 to 10 based on user feedback (legitimate mistyping)
+   */
+  export const loginRateLimit = new Ratelimit({
+    redis,
+-   limiter: Ratelimit.slidingWindow(5, '15 m'),
++   limiter: Ratelimit.slidingWindow(10, '15 m'),
+    analytics: true,
+    prefix: 'ratelimit:login'
+  })
+```
+
+COMPLETE UPDATED CODE:
+```typescript
+/**
+ * Rate limiter for login attempts
+ * Constitutional: Commandment V (10 attempts per 15 minutes)
+ * Adjusted from 5 to 10 based on user feedback (legitimate mistyping)
+ */
+export const loginRateLimit = new Ratelimit({
+  redis,
+  limiter: Ratelimit.slidingWindow(10, '15 m'),
+  analytics: true,
+  prefix: 'ratelimit:login'
+})
+```
+
+VALIDATION CHECKLIST:
+
+□ Numeric change: 5 → 10 (correct)
+□ Time window unchanged: '15 m' (correct)
+□ JSDoc comment updated (reflects new limit)
+□ Registration rate limit unchanged (3 per hour)
+□ TypeScript compiles: npm run type-check
+□ No unrelated changes made
+□ Code formatting preserved
+
+TESTING:
+
+Manual test to verify change:
+1. Attempt login with wrong password 6 times
+   Expected: Still allowed (was blocked at 6 with old limit)
+2. Attempt login with wrong password 11 times
+   Expected: Blocked on 11th attempt (429 status)
+3. Wait 15 minutes
+   Expected: Can attempt again
+
+NEXT STEPS:
+
+Change complete. Test in development:
+```bash
+npm run dev
+# Test login with multiple wrong passwords
+```
+
+If working as expected, commit:
+```bash
+git add lib/rate-limit.ts
+git commit -m "feat: increase login rate limit to 10 attempts (user feedback)"
+```
+
+═══════════════════════════════════════════════════════════
+END OF DELTA EDITING PROMPT
+═══════════════════════════════════════════════════════════
+````
+
+---
+
+### Pattern #3 Validation Checklist
+````markdown
+DELTA EDITING PATTERN QUALITY CHECKLIST:
+
+PRECISION:
+□ Exact location identified
+□ Specific change described (before/after)
+□ Minimal disruption (only what's needed)
+□ Surrounding code unchanged
+
+DOCUMENTATION:
+□ Before/after diff provided
+□ Reason for change explained
+□ Complete updated code shown
+□ Comments updated to match changes
+
+SAFETY:
+□ No breaking changes introduced
+□ TypeScript still compiles
+□ Related code updated (imports, types, comments)
+□ Testing instructions provided
+
+SCOPE:
+□ Only requested changes made
+□ No scope creep (unrelated changes)
+□ No refactoring (unless requested)
+□ Consistent code style maintained
+
+GRADING:
+All checks pass: ⭐⭐⭐⭐⭐ Perfect delta edit
+1-2 issues: ⭐⭐⭐⭐ Good delta edit
+3-4 issues: ⭐⭐⭐ Acceptable
+>4 issues: ⭐⭐ Too disruptive, needs refinement
+````
+
+---
+
+## 🐛 PATTERN #4: DEBUGGING
+
+### Purpose
+
+Systematically identify and fix bugs through structured analysis, hypothesis testing, and validation. Used when something is broken or not working as expected.
+
+### When to Use
+````
+✅ USE DEBUGGING WHEN:
+- Feature not working as expected
+- Error messages appearing
+- Unexpected behavior occurring
+- Need to diagnose root cause
+- "Why doesn't X work?" questions
+
+✅ EXAMPLES:
+- "Login returns 500 error"
+- "Why is rate limiting not triggering?"
+- "Password reset email not sending"
+- "Dashboard shows wrong data"
+
+❌ DON'T USE DEBUGGING WHEN:
+- No error (just enhancement request)
+- Building new feature (use Pattern #1 or #2)
+- Refactoring working code (use Pattern #6)
+- Known issue with known fix (use Pattern #3 Delta Editing)
+````
+
+---
+
+### Pattern Structure
+
+**7-Component Adaptation:**
+````markdown
+COMPONENT 1: PERSONA
+"You are a senior debugging expert specializing in [technology]..."
+Focus: Systematic problem-solving, root cause analysis
+
+COMPONENT 2: CONTEXT
+Include: Layer 3 (Technical) + PROBLEM DESCRIPTION
+Critical: Exact error messages, reproduction steps, expected vs actual behavior
+
+COMPONENT 3: TASK
+Task: "Diagnose and fix bug using systematic debugging protocol"
+IN SCOPE:
+- Symptom analysis
+- Hypothesis generation
+- Evidence collection
+- Root cause identification
+- Fix implementation
+- Fix verification
+
+OUT OF SCOPE:
+- Refactoring unrelated code
+- Adding new features
+- Comprehensive testing (separate phase)
+
+SUCCESS CRITERIA:
+- Bug identified (root cause found)
+- Fix implemented (problem resolved)
+- Verified working (manual test confirms)
+- No regressions (other features still work)
+
+COMPONENT 4: REQUIREMENTS
+DEBUGGING PROTOCOL:
+1. SYMPTOM ANALYSIS: What's wrong?
+2. REPRODUCTION: Can we reproduce it?
+3. EVIDENCE: What data do we have?
+4. HYPOTHESIS: What might be wrong?
+5. TEST: Verify hypothesis
+6. FIX: Implement solution
+7. VERIFY: Confirm fix works
+
+COMPONENT 5: SECURITY MANDATES
+Include: If bug is security-related (vulnerability fix)
+
+COMPONENT 6: META-INSTRUCTIONS
+THINKING PROCESS: "Observe → Hypothesize → Test → Fix → Verify"
+CONSTRAINTS: "Don't guess, follow systematic process"
+
+COMPONENT 7: OUTPUT
+DELIVERABLES: 
+- Root cause analysis
+- Fix implementation
+- Verification steps
+- Prevention recommendations
+````
+
+---
+
+### Complete Example - Rate Limiting Not Working
+````markdown
+═══════════════════════════════════════════════════════════
+CONSTITUTIONAL PROMPT: DEBUG RATE LIMITING FAILURE
+Pattern #4: Debugging
+═══════════════════════════════════════════════════════════
+
+COMPONENT 1: PERSONA ASSIGNMENT
+────────────────────────────────────────────────────────
+
+You are a senior backend engineer and debugging expert specializing 
+in Next.js, API routes, and rate limiting with 12+ years experience.
+
+Your expertise includes:
+- Systematic debugging methodology
+- Next.js 15 middleware architecture
+- Upstash Redis troubleshooting
+- API request flow analysis
+- Root cause analysis techniques
+
+You approach debugging by:
+1. Observing symptoms carefully (no assumptions)
+2. Generating testable hypotheses
+3. Collecting evidence systematically
+4. Identifying root cause (not just symptoms)
+5. Implementing minimal fix (no scope creep)
+6. Verifying fix thoroughly
+
+COMPONENT 2: CONTEXT INJECTION
+────────────────────────────────────────────────────────
+
+LAYER 3: TECHNICAL CONTEXT
+- Framework: Next.js 15.0.3 (App Router)
+- Language: TypeScript 5.3.3
+- Rate Limiting: Upstash Redis + @upstash/ratelimit
+- Deployment: Vercel (production)
+
+PROBLEM DESCRIPTION:
+
+SYMPTOM:
+Rate limiting is not triggering on login endpoint.
+Users can make unlimited login attempts (brute force possible).
+
+EXPECTED BEHAVIOR:
+After 5 failed login attempts, 6th attempt should return 429 (Too Many Requests).
+
+ACTUAL BEHAVIOR:
+Can attempt login 20+ times without any rate limiting.
+Always returns 200 or 401, never 429.
+
+REPRODUCTION STEPS:
+1. Visit /api/auth/login
+2. POST with wrong credentials
+3. Repeat 10 times
+4. Observe: All attempts succeed (no rate limit)
+
+ERROR MESSAGES:
+None visible in browser console or server logs.
+
+WHAT USER TRIED:
+- Verified Upstash Redis credentials (correct in .env.local)
+- Checked rate limit code exists in lib/rate-limit.ts (it does)
+- Confirmed redis connection works (can read/write manually)
+
+RELEVANT CODE:
+
+lib/rate-limit.ts:
+```typescript
+import { Ratelimit } from '@upstash/ratelimit'
+import { Redis } from '@upstash/redis'
+
+const redis = new Redis({
+  url: process.env.UPSTASH_REDIS_REST_URL!,
+  token: process.env.UPSTASH_REDIS_REST_TOKEN!
+})
+
+export const loginRateLimit = new Ratelimit({
+  redis,
+  limiter: Ratelimit.slidingWindow(5, '15 m'),
+  analytics: true,
+  prefix: 'ratelimit:login'
+})
+```
+
+app/api/auth/login/route.ts:
+```typescript
+import { loginRateLimit } from '@/lib/rate-limit'
+
+export async function POST(request: Request) {
+  const { email, password } = await request.json()
+  
+  // Validate credentials
+  const user = await prisma.user.findUnique({ where: { email } })
+  if (!user || !await bcrypt.compare(password, user.password)) {
+    return Response.json({ error: 'Invalid credentials' }, { status: 401 })
+  }
+  
+  // Success
+  return Response.json({ success: true })
+}
+```
+
+middleware.ts:
+```typescript
+import { NextResponse } from 'next/server'
+import type { NextRequest } from 'next/server'
+
+export function middleware(request: NextRequest) {
+  // Some other middleware logic here
+  return NextResponse.next()
+}
+
+export const config = {
+  matcher: ['/dashboard/:path*']
+}
+```
+
+COMPONENT 3: TASK DEFINITION
+────────────────────────────────────────────────────────
+
+TASK: Diagnose why rate limiting isn't working and fix the bug
+
+SCOPE:
+
+IN SCOPE (Debugging + Fix):
+- Identify root cause of rate limit failure
+- Implement minimal fix
+- Verify fix works (rate limiting triggers)
+- Provide testing steps for user
+
+OUT OF SCOPE:
+- Refactoring rate limit implementation (unless necessary for fix)
+- Adding new rate limiters
+- Changing rate limit thresholds (5 attempts is correct)
+
+SUCCESS CRITERIA:
+- Root cause identified and explained
+- Fix implemented (minimal change)
+- After 5 failed logins, 6th returns 429
+- Rate limit resets after 15 minutes
+- No regressions (login still works when correct)
+
+DEBUGGING APPROACH: Systematic 7-step protocol
+
+COMPONENT 4: REQUIREMENTS SPECIFICATION
+────────────────────────────────────────────────────────
+
+DEBUGGING PROTOCOL:
+
+STEP 1: SYMPTOM ANALYSIS
+What we know:
+- Rate limit code exists (lib/rate-limit.ts)
+- Redis connection works (credentials valid)
+- Rate limiting not triggering (never returns 429)
+- Login endpoint works (returns 200/401)
+
+What we DON'T know:
+- Is rate limit function being called?
+- Is redis storing attempt counts?
+- Is middleware blocking execution?
+- Is there an exception being silently caught?
+
+STEP 2: REPRODUCTION
+Can reproduce: YES (consistently fails to rate limit)
+Steps:
+1. Make 10 POST requests to /api/auth/login
+2. Observe: All return 200/401, none return 429
+
+STEP 3: EVIDENCE COLLECTION
+Check these:
+□ Is loginRateLimit actually imported in route?
+  - Look for: import { loginRateLimit } from '@/lib/rate-limit'
+□ Is loginRateLimit.limit() being called?
+  - Look for: await loginRateLimit.limit(identifier)
+□ Is middleware interfering?
+  - Check: middleware.ts config matcher
+□ Are errors being silently caught?
+  - Check: try-catch blocks swallowing errors
+
+STEP 4: HYPOTHESIS GENERATION
+Possible causes (ordered by likelihood):
+
+HYPOTHESIS #1 (MOST LIKELY):
+Rate limit function exists but IS NOT BEING CALLED in route handler.
+Evidence: Code shows loginRateLimit imported but no .limit() call visible.
+Test: Search for "loginRateLimit.limit" in route file.
+
+HYPOTHESIS #2:
+Rate limit IS called but errors are silently caught.
+Evidence: No error logs, but that could indicate caught exception.
+Test: Add console.log before and after rate limit call.
+
+HYPOTHESIS #3:
+Middleware is blocking before rate limit executes.
+Evidence: Middleware.ts exists with config.
+Test: Check if /api/auth/login matches middleware matcher.
+
+HYPOTHESIS #4 (LEAST LIKELY):
+Redis issue (though connection works for manual read/write).
+Evidence: Credentials valid, connection works in testing.
+Test: Check rate limit key in Redis (does it increment?).
+
+STEP 5: TEST HYPOTHESIS #1
+Look at route file - is .limit() being called?
+
+OBSERVATION:
+```typescript
+export async function POST(request: Request) {
+  const { email, password } = await request.json()
+  
+  // Validate credentials
+  const user = await prisma.user.findUnique({ where: { email } })
+  // ...
+}
+```
+
+RESULT: ❌ No call to loginRateLimit.limit()!
+ROOT CAUSE IDENTIFIED: Rate limit imported but never called.
+
+STEP 6: FIX IMPLEMENTATION
+Add rate limit check BEFORE credential validation:
+```typescript
+import { loginRateLimit } from '@/lib/rate-limit'
+
+export async function POST(request: Request) {
+  // RATE LIMIT CHECK (MUST BE FIRST)
+  const ip = request.headers.get('x-forwarded-for') || 'unknown'
+  const { success, limit, remaining, reset } = await loginRateLimit.limit(ip)
+  
+  if (!success) {
+    return Response.json(
+      { error: 'Too many login attempts. Please try again later.' },
+      { 
+        status: 429,
+        headers: {
+          'X-RateLimit-Limit': limit.toString(),
+          'X-RateLimit-Remaining': '0',
+          'X-RateLimit-Reset': reset.toString(),
+          'Retry-After': Math.ceil((reset - Date.now()) / 1000).toString()
+        }
+      }
+    )
+  }
+  
+  // Proceed with credential validation
+  const { email, password } = await request.json()
+  const user = await prisma.user.findUnique({ where: { email } })
+  
+  if (!user || !await bcrypt.compare(password, user.password)) {
+    return Response.json({ error: 'Invalid credentials' }, { status: 401 })
+  }
+  
+  // Success
+  return Response.json({ success: true })
+}
+```
+
+STEP 7: VERIFY FIX
+Manual test:
+1. Make 5 failed login attempts → All return 401
+2. Make 6th failed login attempt → Returns 429 ✓
+3. Check headers → X-RateLimit-* headers present ✓
+4. Wait 15 minutes → Rate limit resets ✓
+5. Make successful login → Returns 200 (not rate limited) ✓
+
+COMPONENT 5: SECURITY MANDATES
+────────────────────────────────────────────────────────
+
+COMMANDMENT V: RATE LIMITING
+
+This bug is a CRITICAL security vulnerability (OWASP A07).
+
+Impact of bug:
+- Brute force attacks possible (unlimited password guessing)
+- Account takeover risk (attacker can try 10,000s of passwords)
+- DoS vulnerability (can overwhelm server with login attempts)
+
+Impact of fix:
+- Brute force prevented (max 5 attempts per 15 min)
+- OWASP A07 compliant (authentication failure protection)
+- DoS mitigated (cannot overwhelm with requests)
+
+Constitutional requirement:
+Rate limiting on authentication endpoints is MANDATORY (Commandment V).
+This bug was a constitutional violation that is now fixed.
+
+COMPONENT 6: META-INSTRUCTIONS
+────────────────────────────────────────────────────────
+
+THINKING PROCESS (Applied):
+
+1. OBSERVED SYMPTOM:
+   ✓ Rate limiting not working (never returns 429)
+
+2. COLLECTED EVIDENCE:
+   ✓ Rate limit code exists (lib/rate-limit.ts)
+   ✓ Route imports rate limit (import statement present)
+   ✓ BUT: No .limit() call in route handler
+
+3. GENERATED HYPOTHESIS:
+   ✓ H1: Function not called (CONFIRMED - root cause)
+
+4. TESTED HYPOTHESIS:
+   ✓ Searched for ".limit(" in route file
+   ✓ Result: Not found → Confirmed root cause
+
+5. IMPLEMENTED FIX:
+   ✓ Added rate limit check at start of handler
+   ✓ Minimal change (only added missing functionality)
+
+6. VERIFIED FIX:
+   ✓ 6th attempt returns 429
+   ✓ Headers present
+   ✓ Reset works
+
+LESSONS LEARNED:
+
+1. Import without usage is common mistake
+   - Prevention: ESLint rule (no-unused-imports)
+   - Prevention: Code review checklist
+
+2. Rate limit must be FIRST check
+   - Reason: Prevent expensive operations (database queries)
+   - Reason: Protect against DoS
+
+3. This was not detected in testing
+   - Lesson: Manual security testing needed
+   - Lesson: Add automated test for rate limiting
+
+PREVENTION RECOMMENDATIONS:
+
+1. Add test:
+```typescript
+   // tests/api/auth/login.test.ts
+   test('rate limits after 5 attempts', async () => {
+     for (let i = 0; i < 6; i++) {
+       const response = await POST('/api/auth/login', { email, password: 'wrong' })
+       if (i < 5) expect(response.status).toBe(401)
+       else expect(response.status).toBe(429)
+     }
+   })
+```
+
+2. Add ESLint rule (warn on unused imports)
+
+3. Add comment reminder:
+```typescript
+   // SECURITY: Rate limit MUST be first check (before any DB queries)
+   const { success } = await loginRateLimit.limit(ip)
+```
+
+COMPONENT 7: OUTPUT FORMAT & VALIDATION
+────────────────────────────────────────────────────────
+
+ROOT CAUSE ANALYSIS:
+
+PROBLEM:
+Rate limiting code exists (lib/rate-limit.ts) but was never
+called in the login route handler (app/api/auth/login/route.ts).
+
+CAUSE:
+Developer imported loginRateLimit but forgot to call .limit().
+Common mistake: Import without usage.
+
+IMPACT:
+CRITICAL security vulnerability (OWASP A07).
+Brute force attacks possible, unlimited login attempts.
+
+FIX IMPLEMENTATION:
+
+BEFORE:
+```typescript
+export async function POST(request: Request) {
+  const { email, password } = await request.json()
+  // ... no rate limit check ...
+}
+```
+
+AFTER:
+```typescript
+export async function POST(request: Request) {
+  // Rate limit check (ADDED)
+  const ip = request.headers.get('x-forwarded-for') || 'unknown'
+  const { success, reset } = await loginRateLimit.limit(ip)
+  
+  if (!success) {
+    return Response.json(
+      { error: 'Too many login attempts. Please try again later.' },
+      { status: 429, headers: { 'Retry-After': ... } }
+    )
+  }
+  
+  // Original code continues...
+  const { email, password } = await request.json()
+  // ...
+}
+```
+
+COMPLETE FIXED CODE:
+
+[... Full updated route file provided ...]
+
+VERIFICATION STEPS:
+
+User should test:
+1. Make 5 failed login attempts
+```bash
+   for i in {1..5}; do
+     curl -X POST http://localhost:3000/api/auth/login \
+       -H "Content-Type: application/json" \
+       -d '{"email":"test@example.com","password":"wrong"}'
+   done
+```
+   Expected: All return 401
+
+2. Make 6th attempt
+   Expected: Returns 429 with Retry-After header
+
+3. Wait 15 minutes (or clear Redis key)
+   Expected: Can attempt again
+
+PREVENTION:
+
+Add this test to prevent regression:
+[... Test code provided in Component 6 ...]
+
+NEXT STEPS:
+
+Bug fixed. Recommended actions:
+1. Test in development (verify fix works)
+2. Add automated test (prevent regression)
+3. Deploy to production
+4. Security audit (check for similar issues in other endpoints)
+
+═══════════════════════════════════════════════════════════
+END OF DEBUGGING PROMPT
+═══════════════════════════════════════════════════════════
+````
+
+---
+
+### Pattern #4 Validation Checklist
+````markdown
+DEBUGGING PATTERN QUALITY CHECKLIST:
+
+SYSTEMATIC APPROACH:
+□ 7-step protocol followed (Symptom → Fix → Verify)
+□ Multiple hypotheses generated (not just first guess)
+□ Evidence collected before assuming cause
+□ Root cause identified (not just symptoms treated)
+
+PROBLEM ANALYSIS:
+□ Symptom clearly described
+□ Expected vs actual behavior specified
+□ Reproduction steps provided
+□ Error messages included
+
+FIX QUALITY:
+□ Minimal change (only what's needed to fix)
+□ Root cause addressed (not symptom band-aid)
+□ No scope creep (no unrelated changes)
+□ Verification steps provided
+
+PREVENTION:
+□ Lessons learned documented
+□ Prevention recommendations provided
+□ Test added to prevent regression
+□ Similar issues identified
+
+GRADING:
+All checks pass: ⭐⭐⭐⭐⭐ Excellent debugging
+1-2 issues: ⭐⭐⭐⭐ Good debugging
+3-4 issues: ⭐⭐⭐ Acceptable
+>4 issues: ⭐⭐ Needs improvement (guessing vs. systematic)
+````
+
+---
+
+**[CONTINUING WITH PATTERNS #5-12 IN NEXT RESPONSE...]**
+
+**Current Progress:** 4/12 patterns documented (Scaffolding, Implementation, Delta Editing, Debugging complete)
+
+Should I continue with the remaining 8 patterns? 🚀
