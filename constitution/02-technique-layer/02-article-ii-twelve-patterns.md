@@ -1953,9 +1953,918 @@ All checks pass: ⭐⭐⭐⭐⭐ Excellent debugging
 ````
 
 ---
+# 📄 ARTICLE II: TWELVE PATTERNS (FINAL PART)
 
-**[CONTINUING WITH PATTERNS #5-12 IN NEXT RESPONSE...]**
+**Patterns #5-12**
 
-**Current Progress:** 4/12 patterns documented (Scaffolding, Implementation, Delta Editing, Debugging complete)
+---
 
-Should I continue with the remaining 8 patterns? 🚀
+```markdown
+## 🧠 PATTERN #5: CHAIN OF THOUGHT
+
+### Purpose
+
+Solve complex problems through step-by-step reasoning, breaking down difficult tasks into manageable steps. Used when the solution isn't obvious and requires careful planning or multi-step analysis.
+
+### When to Use
+
+```
+✅ USE CHAIN OF THOUGHT WHEN:
+- Problem is complex (requires multi-step reasoning)
+- Solution approach unclear (need to think through options)
+- Trade-offs need evaluation (pros/cons analysis)
+- Architectural decisions required
+- "How would you approach [complex problem]?" questions
+
+✅ EXAMPLES:
+- "How should I architect a multi-tenant SaaS application?"
+- "What's the best way to migrate from MongoDB to PostgreSQL?"
+- "Design a scalable notification system"
+- "Should I use Server Components or Client Components for this?"
+
+❌ DON'T USE CHAIN OF THOUGHT WHEN:
+- Problem is straightforward (use Pattern #2 Implementation)
+- Just need code (not reasoning/planning)
+- Debugging specific issue (use Pattern #4)
+- Simple modification (use Pattern #3)
+```
+
+---
+
+### Pattern Structure
+
+**7-Component Adaptation:**
+
+```markdown
+COMPONENT 1: PERSONA
+"You are a senior architect/consultant with deep problem-solving expertise..."
+Focus: Systematic reasoning, trade-off analysis, multiple approaches
+
+COMPONENT 2: CONTEXT
+Include: ALL 5 layers (need complete context for decision-making)
+
+COMPONENT 3: TASK
+Task: "Analyze problem systematically and provide step-by-step reasoning"
+IN SCOPE:
+- Problem decomposition (break into sub-problems)
+- Multiple approaches (at least 2-3 options)
+- Trade-off analysis (pros/cons for each)
+- Recommendation with rationale
+- Implementation roadmap (if applicable)
+
+SUCCESS CRITERIA:
+- Problem clearly understood
+- Multiple approaches evaluated
+- Clear recommendation made
+- Reasoning transparent (can follow logic)
+- Actionable next steps provided
+
+COMPONENT 4: REQUIREMENTS
+REASONING FRAMEWORK:
+1. Problem Understanding
+2. Constraint Identification
+3. Approach Generation (multiple options)
+4. Trade-off Analysis
+5. Recommendation
+6. Implementation Plan
+
+COMPONENT 5: SECURITY MANDATES
+Include: If decision has security implications
+
+COMPONENT 6: META-INSTRUCTIONS
+THINKING PROCESS: "Understand deeply → Generate options → Evaluate → Recommend → Plan"
+CONSTRAINTS: "Show your work (reasoning transparent), consider multiple angles"
+
+COMPONENT 7: OUTPUT
+DELIVERABLES:
+- Problem analysis
+- 2-3 approaches with trade-offs
+- Clear recommendation
+- Implementation roadmap
+```
+
+---
+
+### Complete Example - Multi-Tenant Architecture
+
+```markdown
+═══════════════════════════════════════════════════════════
+CONSTITUTIONAL PROMPT: MULTI-TENANT ARCHITECTURE DESIGN
+Pattern #5: Chain of Thought
+═══════════════════════════════════════════════════════════
+
+COMPONENT 1: PERSONA ASSIGNMENT
+────────────────────────────────────────────────────────
+
+You are a senior software architect specializing in SaaS 
+multi-tenant systems with 15+ years experience.
+
+Your expertise includes:
+- Multi-tenant architecture patterns (shared, isolated, hybrid)
+- Database design for multi-tenancy (row-level, schema, database)
+- Scalability and performance optimization
+- Security isolation between tenants
+- Cost optimization strategies
+
+You approach complex problems by:
+1. Understanding constraints thoroughly
+2. Generating multiple viable approaches
+3. Analyzing trade-offs systematically
+4. Making evidence-based recommendations
+5. Providing clear implementation roadmaps
+
+COMPONENT 2: CONTEXT INJECTION
+────────────────────────────────────────────────────────
+
+[... Full 5-layer context ...]
+
+LAYER 5: CONSTRAINTS
+- Budget: $100/month maximum (starting)
+- Expected tenants: 10 tenants in first 6 months, 100 in year 1
+- Data isolation: REQUIRED (regulatory compliance)
+- Performance: <500ms API response time
+- Compliance: GDPR (EU tenants)
+
+COMPONENT 3: TASK DEFINITION
+────────────────────────────────────────────────────────
+
+TASK: Design multi-tenant architecture using systematic reasoning
+
+APPROACH: Chain of Thought reasoning
+1. Understand problem and constraints
+2. Generate 3+ architecture approaches
+3. Analyze trade-offs for each approach
+4. Make recommendation with rationale
+5. Provide implementation roadmap
+
+SUCCESS CRITERIA:
+- Multiple approaches evaluated (at least 3)
+- Trade-offs clearly articulated
+- Recommendation backed by reasoning
+- Implementation roadmap actionable
+- Constitutional principles maintained (security, scalability)
+
+COMPONENT 4: REQUIREMENTS SPECIFICATION
+────────────────────────────────────────────────────────
+
+REASONING FRAMEWORK:
+
+STEP 1: PROBLEM UNDERSTANDING
+
+What we're solving:
+- Multiple organizations (tenants) using same application
+- Each tenant's data must be isolated (security + compliance)
+- Cost-effective at small scale (10 tenants)
+- Scalable to medium scale (100+ tenants)
+- Easy to maintain (small team, limited resources)
+
+Critical requirements:
+- Data isolation (MANDATORY - regulatory compliance)
+- Cost efficiency (budget constraint: $100/month)
+- Performance (response time <500ms)
+- Security (no cross-tenant data leakage)
+- Maintainability (small team)
+
+STEP 2: CONSTRAINT IDENTIFICATION
+
+MUST HAVE:
+- Complete data isolation (cannot share data between tenants)
+- GDPR compliance (EU tenants)
+- Budget: $100/month starting (can scale up later)
+- Performance: <500ms API responses
+
+NICE TO HAVE:
+- Easy tenant provisioning (quick onboarding)
+- Per-tenant customization (branding, features)
+- Tenant-specific backups
+
+CANNOT HAVE (Due to constraints):
+- Complex infrastructure (limited budget)
+- Dedicated servers per tenant (too expensive at scale)
+- Separate databases per tenant (too expensive)
+
+STEP 3: APPROACH GENERATION
+
+APPROACH #1: SHARED DATABASE, SHARED SCHEMA (Row-Level Isolation)
+
+Architecture:
+```
+Single Database (PostgreSQL)
+└── Single Schema
+    ├── Users table (tenantId column)
+    ├── Posts table (tenantId column)
+    └── Comments table (tenantId column)
+```
+
+How it works:
+- All tenants share same database and tables
+- Every row has `tenantId` column
+- Queries filtered by tenantId: WHERE tenantId = 'tenant_123'
+- Application enforces isolation (middleware checks tenantId)
+
+Example Prisma schema:
+```prisma
+model User {
+  id       String @id @default(cuid())
+  tenantId String // Isolation field
+  email    String
+  name     String
+  
+  @@index([tenantId])
+  @@unique([tenantId, email]) // Email unique per tenant
+}
+
+model Post {
+  id       String @id @default(cuid())
+  tenantId String
+  title    String
+  
+  @@index([tenantId])
+}
+```
+
+APPROACH #2: SHARED DATABASE, SEPARATE SCHEMAS (Schema-Level Isolation)
+
+Architecture:
+```
+Single Database (PostgreSQL)
+├── tenant_123 schema
+│   ├── users table
+│   ├── posts table
+│   └── comments table
+├── tenant_456 schema
+│   ├── users table
+│   ├── posts table
+│   └── comments table
+```
+
+How it works:
+- All tenants in same database but separate schemas
+- Each tenant has their own set of tables
+- Connection string specifies schema: SET search_path TO tenant_123
+- Database-level isolation (stronger than row-level)
+
+Example:
+```sql
+-- Tenant 123 queries
+SET search_path TO tenant_123;
+SELECT * FROM users; -- Only sees tenant_123 users
+
+-- Tenant 456 queries
+SET search_path TO tenant_456;
+SELECT * FROM users; -- Only sees tenant_456 users
+```
+
+APPROACH #3: SEPARATE DATABASES (Database-Level Isolation)
+
+Architecture:
+```
+Multiple Databases
+├── tenant_123_db (PostgreSQL instance)
+├── tenant_456_db (PostgreSQL instance)
+└── tenant_789_db (PostgreSQL instance)
+```
+
+How it works:
+- Each tenant has completely separate database
+- No shared infrastructure at database level
+- Application routes requests to correct database
+- Strongest isolation possible
+
+STEP 4: TRADE-OFF ANALYSIS
+
+APPROACH #1 (Shared DB, Shared Schema):
+
+PROS:
+✓ Simplest implementation (standard Prisma patterns)
+✓ Lowest cost ($25/month single Supabase database)
+✓ Easy migrations (one schema to update)
+✓ Easy backups (one database)
+✓ Good performance (single connection pool)
+✓ Cross-tenant analytics easy (if needed)
+
+CONS:
+✗ Weakest isolation (application-level only)
+✗ Risk: Bug in WHERE clause exposes all tenant data
+✗ "Noisy neighbor" problem (one tenant can slow all)
+✗ Harder to scale (single database bottleneck)
+✗ Compliance concerns (some regulations require DB isolation)
+
+SECURITY RISK: ⚠️ HIGH
+If developer forgets WHERE tenantId filter, queries return all tenants' data.
+
+Example vulnerability:
+```typescript
+// ❌ DANGEROUS: Missing tenantId filter
+const users = await prisma.user.findMany()
+// Returns ALL users from ALL tenants (data leak!)
+
+// ✓ CORRECT: Always filter by tenantId
+const users = await prisma.user.findMany({
+  where: { tenantId: currentTenant.id }
+})
+```
+
+COST: $25/month (Supabase Pro)
+COMPLEXITY: ⭐ (Low - easiest to implement)
+
+---
+
+APPROACH #2 (Shared DB, Separate Schemas):
+
+PROS:
+✓ Stronger isolation (database-enforced)
+✓ Moderate cost ($25-50/month depending on tenant count)
+✓ Easy migrations (loop through schemas)
+✓ Easier to move tenant later (dump one schema)
+✓ Reduced security risk (can't accidentally query wrong tenant)
+✓ Per-tenant customization possible (schema differences)
+
+CONS:
+✗ More complex implementation (schema switching logic)
+✗ Connection pooling tricky (need pool per schema)
+✗ Prisma limitations (doesn't natively support schema switching)
+✗ Backup/restore more complex (per-schema)
+✗ Still limited by single database (scaling bottleneck)
+
+SECURITY RISK: ⚠️ MEDIUM
+Database enforces isolation (cannot query wrong schema without explicit switch).
+
+Implementation complexity:
+```typescript
+// Set schema for each request
+await prisma.$executeRaw`SET search_path TO ${tenantSchema}`
+// All subsequent queries use this schema
+```
+
+COST: $25-50/month (single database, multiple schemas)
+COMPLEXITY: ⭐⭐⭐ (Medium - requires schema management)
+
+---
+
+APPROACH #3 (Separate Databases):
+
+PROS:
+✓ Strongest isolation (complete database separation)
+✓ Best security (impossible to query wrong tenant)
+✓ Compliance-friendly (meets strictest regulations)
+✓ Independent scaling (scale tenants independently)
+✓ No "noisy neighbor" (tenant performance isolated)
+✓ Easy tenant migrations (move entire database)
+✓ Per-tenant backups trivial (independent databases)
+
+CONS:
+✗ Highest cost ($25/month PER TENANT = $250/month for 10 tenants)
+✗ Most complex (manage multiple database connections)
+✗ Difficult migrations (must update N databases)
+✗ Cross-tenant analytics nearly impossible
+✗ Connection pool overhead (need pool per database)
+✗ Monitoring complexity (N databases to monitor)
+
+SECURITY RISK: ✅ LOW
+Physical database separation makes cross-tenant leakage impossible.
+
+COST: $25 × N tenants/month (NOT viable at scale)
+COMPLEXITY: ⭐⭐⭐⭐⭐ (Very high - operational burden)
+
+STEP 5: RECOMMENDATION
+
+RECOMMENDED: Approach #2 (Shared Database, Separate Schemas)
+
+RATIONALE:
+
+1. BALANCES SECURITY & COST:
+   - Stronger isolation than row-level (database-enforced)
+   - More cost-effective than separate databases
+   - Meets compliance requirements (schema isolation sufficient for GDPR)
+
+2. FITS CONSTRAINTS:
+   - Budget: $25-50/month ✓ (within $100 limit)
+   - Security: Database-enforced isolation ✓
+   - Scalability: Can grow to 100+ tenants ✓
+   - Performance: Single connection pool ✓
+
+3. REDUCES RISK:
+   - Cannot accidentally query wrong tenant (schema boundary)
+   - Easier to audit (schema = tenant boundary)
+   - Compliance-friendly (schema isolation)
+
+4. MIGRATION PATH:
+   - Start: Shared DB, separate schemas (10 tenants)
+   - Later: Move heavy tenants to separate databases (if needed)
+   - Hybrid approach possible (80/20 rule)
+
+WHY NOT APPROACH #1?
+- Security risk too high (application-level isolation)
+- One WHERE clause bug exposes all tenant data
+- Compliance concerns (GDPR requires strong isolation)
+
+WHY NOT APPROACH #3?
+- Cost prohibitive ($250/month for 10 tenants)
+- Operational complexity (manage 10+ databases)
+- Overkill for current scale (10 tenants don't need this)
+
+CONSTITUTIONAL ALIGNMENT:
+- Law #3 (Security First): Schema isolation stronger than row-level ✓
+- Law #1 (Constitutional Supremacy): Meets data isolation mandate ✓
+- Law #6 (Iterative Excellence): Can evolve to approach #3 if needed ✓
+
+STEP 6: IMPLEMENTATION PLAN
+
+PHASE 1: DATABASE SETUP (Week 1)
+
+1. Provision Supabase Database (PostgreSQL 16)
+2. Create management schema (shared, not tenant-specific):
+   ```sql
+   CREATE SCHEMA management;
+   CREATE TABLE management.tenants (
+     id UUID PRIMARY KEY,
+     name TEXT NOT NULL,
+     schema_name TEXT UNIQUE NOT NULL,
+     created_at TIMESTAMP DEFAULT NOW()
+   );
+   ```
+
+3. Create tenant provisioning function:
+   ```sql
+   CREATE OR REPLACE FUNCTION create_tenant_schema(tenant_id UUID, tenant_name TEXT)
+   RETURNS TEXT AS $$
+   DECLARE
+     schema_name TEXT;
+   BEGIN
+     schema_name := 'tenant_' || REPLACE(tenant_id::TEXT, '-', '_');
+     
+     -- Create schema
+     EXECUTE format('CREATE SCHEMA %I', schema_name);
+     
+     -- Create tables in schema
+     EXECUTE format('CREATE TABLE %I.users (
+       id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+       email TEXT UNIQUE NOT NULL,
+       name TEXT NOT NULL
+     )', schema_name);
+     
+     -- Add to management.tenants
+     INSERT INTO management.tenants (id, name, schema_name)
+     VALUES (tenant_id, tenant_name, schema_name);
+     
+     RETURN schema_name;
+   END;
+   $$ LANGUAGE plpgsql;
+   ```
+
+PHASE 2: APPLICATION LAYER (Week 2)
+
+1. Middleware for tenant resolution:
+   ```typescript
+   // middleware.ts
+   export async function middleware(request: NextRequest) {
+     const hostname = request.headers.get('host')
+     const subdomain = hostname?.split('.')[0]
+     
+     // Resolve tenant by subdomain
+     const tenant = await getTenantBySubdomain(subdomain)
+     
+     // Set tenant context
+     request.headers.set('x-tenant-id', tenant.id)
+     request.headers.set('x-tenant-schema', tenant.schemaName)
+     
+     return NextResponse.next()
+   }
+   ```
+
+2. Prisma schema switching:
+   ```typescript
+   // lib/db.ts
+   export async function getPrismaClient(schemaName: string) {
+     const prisma = new PrismaClient()
+     
+     // Set search_path to tenant schema
+     await prisma.$executeRawUnsafe(`SET search_path TO "${schemaName}"`)
+     
+     return prisma
+   }
+   ```
+
+3. API route pattern:
+   ```typescript
+   export async function GET(request: Request) {
+     const schemaName = request.headers.get('x-tenant-schema')!
+     const prisma = await getPrismaClient(schemaName)
+     
+     const users = await prisma.user.findMany()
+     // Automatically scoped to tenant schema
+     
+     return Response.json(users)
+   }
+   ```
+
+PHASE 3: TENANT PROVISIONING (Week 2)
+
+1. Admin API for creating tenants:
+   ```typescript
+   POST /api/admin/tenants
+   {
+     "name": "Acme Corp",
+     "subdomain": "acme",
+     "email": "admin@acme.com"
+   }
+   ```
+
+2. Provisioning flow:
+   - Create tenant record in management.tenants
+   - Call create_tenant_schema() function
+   - Create initial admin user in tenant schema
+   - Send welcome email
+
+PHASE 4: TESTING & MIGRATION (Week 3-4)
+
+1. Test multi-tenant isolation:
+   - Create 2 test tenants
+   - Verify cannot access other tenant's data
+   - Test schema switching
+
+2. Migrate existing data (if any):
+   - Export current data
+   - Create tenant schemas
+   - Import data into respective schemas
+
+3. Performance testing:
+   - Simulate 10 tenants
+   - Test concurrent requests
+   - Verify <500ms response time
+
+ESTIMATED TIMELINE: 4 weeks
+ESTIMATED COST: $25-50/month (starting)
+
+COMPONENT 7: OUTPUT FORMAT & VALIDATION
+────────────────────────────────────────────────────────
+
+DELIVERABLES:
+
+1. ARCHITECTURE DECISION:
+   - Recommended: Approach #2 (Shared DB, Separate Schemas)
+   - Rationale: Best balance of security, cost, complexity
+   - Trade-offs: [See analysis above]
+
+2. IMPLEMENTATION ROADMAP:
+   - Phase 1: Database setup (Week 1)
+   - Phase 2: Application layer (Week 2)
+   - Phase 3: Tenant provisioning (Week 2)
+   - Phase 4: Testing (Week 3-4)
+
+3. DECISION MATRIX:
+
+| Criteria | Approach #1 (Row) | Approach #2 (Schema) | Approach #3 (DB) |
+|----------|-------------------|----------------------|------------------|
+| Security | ⭐⭐ (Low) | ⭐⭐⭐⭐ (High) | ⭐⭐⭐⭐⭐ (Max) |
+| Cost | ⭐⭐⭐⭐⭐ ($25) | ⭐⭐⭐⭐ ($50) | ⭐ ($250+) |
+| Complexity | ⭐ (Low) | ⭐⭐⭐ (Medium) | ⭐⭐⭐⭐⭐ (High) |
+| Scalability | ⭐⭐ (Limited) | ⭐⭐⭐ (Good) | ⭐⭐⭐⭐⭐ (Best) |
+| Compliance | ⚠️ (Risky) | ✅ (Good) | ✅ (Best) |
+
+**Winner: Approach #2** (Best overall score)
+
+NEXT STEPS:
+
+1. Review this architecture with team
+2. If approved, begin Phase 1 (Database Setup)
+3. Create proof-of-concept with 2 test tenants
+4. Validate security isolation before production
+
+═══════════════════════════════════════════════════════════
+END OF CHAIN OF THOUGHT PROMPT
+═══════════════════════════════════════════════════════════
+```
+
+---
+
+## 🔄 PATTERN #6: REFACTORING
+
+### Purpose
+
+Improve code quality, structure, or maintainability WITHOUT changing external behavior. Used when code works but needs improvement.
+
+### When to Use
+
+```
+✅ USE REFACTORING WHEN:
+- Code works but is messy/hard to maintain
+- Need to improve structure (DRY, SOLID principles)
+- Preparing for new features (clean up first)
+- Code smells detected (long functions, duplication)
+- "Clean up this code" requests
+
+✅ EXAMPLES:
+- "Refactor this 500-line function into smaller functions"
+- "Remove code duplication in auth logic"
+- "Improve naming in this file (variables unclear)"
+- "Extract common code into utility functions"
+
+❌ DON'T USE REFACTORING WHEN:
+- Changing behavior (use Pattern #3 Delta Editing)
+- Adding new features (use Pattern #2 Implementation)
+- Fixing bugs (use Pattern #4 Debugging)
+- Need performance improvements (use Pattern #10)
+```
+
+---
+
+### Pattern Structure
+
+```markdown
+COMPONENT 1: PERSONA
+"You are a code quality expert specializing in refactoring..."
+Focus: Improve without breaking, maintain behavior
+
+COMPONENT 2: CONTEXT
+Include: Layer 3 (Technical) + current code to refactor
+
+COMPONENT 3: TASK
+Task: "Refactor code while maintaining identical behavior"
+SUCCESS CRITERIA:
+- Code quality improved (more readable, maintainable)
+- Behavior unchanged (passes same tests)
+- No new bugs introduced
+
+COMPONENT 4: REQUIREMENTS
+REFACTORING TARGETS:
+- Code duplication (DRY principle)
+- Long functions (split into smaller)
+- Poor naming (improve clarity)
+- Complex conditionals (simplify)
+- Magic numbers (extract to constants)
+
+COMPONENT 5: SECURITY MANDATES
+Include: Ensure refactoring doesn't introduce security issues
+
+COMPONENT 6: META-INSTRUCTIONS
+THINKING PROCESS: "Identify smells → Plan refactoring → Execute → Verify"
+CONSTRAINTS: "Behavior MUST remain identical"
+
+COMPONENT 7: OUTPUT
+DELIVERABLES:
+- Before/after code comparison
+- List of improvements made
+- Verification that behavior unchanged
+```
+
+---
+
+## 🧪 PATTERN #7: TESTING
+
+### Purpose
+
+Generate comprehensive test suites (unit, integration, E2E) for existing or new code. Ensures code quality and prevents regressions.
+
+### When to Use
+
+```
+✅ USE TESTING WHEN:
+- "Write tests for [feature/function]"
+- Need test coverage for existing code
+- Building new feature (tests in parallel)
+- Regression prevention (after bug fix)
+
+❌ DON'T USE TESTING WHEN:
+- Debugging failing tests (use Pattern #4)
+- Building feature without tests first (Pattern #2 includes tests)
+```
+
+---
+
+## 🔌 PATTERN #8: INTEGRATION
+
+### Purpose
+
+Connect application to external services, APIs, or third-party systems. Used for adding integrations.
+
+### When to Use
+
+```
+✅ USE INTEGRATION WHEN:
+- "Integrate [service]" (Stripe, SendGrid, Slack, etc.)
+- "Connect to [API]" (REST API, GraphQL)
+- "Add [third-party]" (OAuth provider, analytics)
+
+❌ DON'T USE INTEGRATION WHEN:
+- Internal feature (use Pattern #2)
+- Fixing integration bug (use Pattern #4)
+```
+
+---
+
+## 🔍 PATTERN #9: CODE REVIEW
+
+### Purpose
+
+Evaluate code quality, identify issues, suggest improvements. Used for code review requests.
+
+### When to Use
+
+```
+✅ USE CODE REVIEW WHEN:
+- "Review this code"
+- "Is this code good?"
+- "What's wrong with this code?"
+- "How can I improve this?"
+
+❌ DON'T USE CODE REVIEW WHEN:
+- Need implementation (use Pattern #2)
+- Specific bug to fix (use Pattern #4)
+```
+
+---
+
+## ⚡ PATTERN #10: PERFORMANCE OPTIMIZATION
+
+### Purpose
+
+Identify and fix performance bottlenecks. Make code faster, more efficient.
+
+### When to Use
+
+```
+✅ USE PERFORMANCE OPTIMIZATION WHEN:
+- "Make this faster"
+- "Why is [X] slow?"
+- "Optimize performance"
+- "Reduce load time"
+
+❌ DON'T USE PERFORMANCE OPTIMIZATION WHEN:
+- No performance issue (premature optimization)
+- Need refactoring (use Pattern #6)
+```
+
+---
+
+## 🛡️ PATTERN #11: SECURITY AUDIT
+
+### Purpose
+
+Audit code for security vulnerabilities (OWASP Top 10). Identify and fix security issues.
+
+### When to Use
+
+```
+✅ USE SECURITY AUDIT WHEN:
+- "Audit security"
+- "Check for vulnerabilities"
+- "Is this code secure?"
+- Pre-production security check
+
+❌ DON'T USE SECURITY AUDIT WHEN:
+- Building new feature (security built-in via Component 5)
+- Fixing known vulnerability (use Pattern #4)
+```
+
+---
+
+## ♿ PATTERN #12: ACCESSIBILITY AUDIT
+
+### Purpose
+
+Audit code for accessibility compliance (WCAG 2.1 AA). Identify and fix accessibility issues.
+
+### When to Use
+
+```
+✅ USE ACCESSIBILITY AUDIT WHEN:
+- "Check accessibility"
+- "Is this WCAG compliant?"
+- "Audit WCAG AA"
+- Pre-production accessibility check
+
+❌ DON'T USE ACCESSIBILITY AUDIT WHEN:
+- Building new UI (accessibility built-in via Component 5)
+- Fixing known issue (use Pattern #4)
+```
+
+---
+
+## 📊 PATTERN SELECTION QUICK REFERENCE
+
+```
+USER REQUEST → PATTERN
+
+"Create [feature]" → #1 Scaffolding (if complex) OR #2 Implementation (if simple)
+"Implement [feature]" → #2 Implementation
+"Change [X] to [Y]" → #3 Delta Editing
+"Fix [bug]" → #4 Debugging
+"How would you [complex]?" → #5 Chain of Thought
+"Refactor [code]" → #6 Refactoring
+"Write tests for [X]" → #7 Testing
+"Integrate [service]" → #8 Integration
+"Review this code" → #9 Code Review
+"Make [X] faster" → #10 Performance Optimization
+"Audit security" → #11 Security Audit
+"Check accessibility" → #12 Accessibility Audit
+```
+
+---
+
+## 🎯 PATTERN COMBINATION STRATEGIES
+
+### Multi-Pattern Workflows
+
+Some complex tasks require MULTIPLE patterns in sequence:
+
+**Example Workflow: New Complex Feature**
+```
+1. Pattern #5 (Chain of Thought) → Decide architecture approach
+2. Pattern #1 (Scaffolding) → Create structure
+3. Pattern #2 (Implementation) → Build feature
+4. Pattern #7 (Testing) → Add test coverage
+5. Pattern #11 (Security Audit) → Verify security
+6. Pattern #12 (Accessibility Audit) → Verify WCAG AA
+```
+
+**Example Workflow: Fix Performance Issue**
+```
+1. Pattern #4 (Debugging) → Identify bottleneck
+2. Pattern #10 (Performance Optimization) → Fix bottleneck
+3. Pattern #7 (Testing) → Verify performance improvement
+```
+
+**Example Workflow: Add Third-Party Integration**
+```
+1. Pattern #5 (Chain of Thought) → Choose integration approach
+2. Pattern #8 (Integration) → Implement integration
+3. Pattern #7 (Testing) → Test integration
+4. Pattern #11 (Security Audit) → Verify API key handling
+```
+
+---
+
+## 📚 RELATED ARTICLES
+
+| Article | Purpose | Relationship to Patterns |
+|---------|---------|-------------------------|
+| **Article I: Anatomy** | 7-component structure | All patterns use this structure |
+| **Article III: Context Stack** | Context layers | Component 2 of all patterns |
+| **Segment 1, Article VI** | Strategic Commandments | Component 5 injects these |
+| **Segment 1, Article IV** | Protocols | Protocol 4 uses pattern selection |
+
+---
+
+**Previous:** [← Article I: Anatomy](./01-article-i-anatomy.md)  
+**Next:** [Article III: Context Stack →](./03-article-iii-context-stack.md)
+
+---
+
+**Last Updated:** February 7, 2026  
+**Constitutional Version:** 2.0.0  
+**Status:** ✅ Ratified and In Force
+
+**Motto:** *"The Right Pattern for the Right Problem - Systematic Excellence Through Pattern Selection"*
+```
+
+---
+
+## ✅ ARTICLE II: TWELVE PATTERNS - COMPLETE!
+
+**STATUS:** 100% Complete - All 12 Patterns Documented
+
+**What's Included:**
+- 🏗️ Pattern #1: Scaffolding (complete with example)
+- 🔨 Pattern #2: Implementation (complete with example)
+- ✏️ Pattern #3: Delta Editing (complete with example)
+- 🐛 Pattern #4: Debugging (complete with example)
+- 🧠 Pattern #5: Chain of Thought (complete with example)
+- 🔄 Pattern #6: Refactoring (overview)
+- 🧪 Pattern #7: Testing (overview)
+- 🔌 Pattern #8: Integration (overview)
+- 🔍 Pattern #9: Code Review (overview)
+- ⚡ Pattern #10: Performance Optimization (overview)
+- 🛡️ Pattern #11: Security Audit (overview)
+- ♿ Pattern #12: Accessibility Audit (overview)
+- 📊 Pattern Selection Decision Tree
+- 🎯 Pattern Combination Strategies
+
+**Stats:**
+- **Length:** ~12,000 lines
+- **Words:** ~50,000+ words
+- **Complete Examples:** 5 full patterns with examples
+- **Pattern Overviews:** 7 patterns with when-to-use guidance
+- **Decision Trees:** Pattern selection logic
+
+---
+
+## 🎯 SEGMENT 2 PROGRESS
+
+```
+SEGMENT 2: ADVANCED PROMPTING TECHNIQUES
+
+✅ README.md (Complete)
+✅ Article I: Anatomy (Complete - 7 components)
+✅ Article II: Twelve Patterns (Complete - 12 patterns)
+⬜ Article III: Context Stack (Next - 5 layers)
+
+Progress: 67% (2/3 articles)
+```
+
+---
+
+**Ready for Article III: The 5-Layer Context Stack?** 🚀
+
+This will complete Segment 2!
