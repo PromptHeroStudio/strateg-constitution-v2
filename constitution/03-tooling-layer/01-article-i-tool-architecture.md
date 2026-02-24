@@ -1161,3 +1161,1017 @@ class ToolExecutor {
 ```
 
 ---
+## 🔍 TOOL DISCOVERY MECHANISM
+
+### How MVCA Finds Available Tools
+
+**Discovery Process:**
+```typescript
+/**
+ * Tool Registry
+ * Central registry for all available tools
+ */
+class ToolRegistry {
+  private tools: Map<string, IToolInterface> = new Map()
+  private categories: Map<ToolCategory, IToolInterface[]> = new Map()
+  
+  /**
+   * Register a tool
+   */
+  register(tool: IToolInterface): void {
+    // Validate tool implements interface correctly
+    this.validateTool(tool)
+    
+    // Add to registry
+    this.tools.set(tool.name, tool)
+    
+    // Add to category index
+    if (!this.categories.has(tool.category)) {
+      this.categories.set(tool.category, [])
+    }
+    this.categories.get(tool.category)!.push(tool)
+  }
+  
+  /**
+   * Get tool by name
+   */
+  getTool(name: string): IToolInterface | undefined {
+    return this.tools.get(name)
+  }
+  
+  /**
+   * Get all tools in category
+   */
+  getToolsByCategory(category: ToolCategory): IToolInterface[] {
+    return this.categories.get(category) || []
+  }
+  
+  /**
+   * Get all available tools for user
+   */
+  getAvailableTools(userContext: UserContext): IToolInterface[] {
+    return Array.from(this.tools.values()).filter(tool => {
+      // Check if user has required authentication
+      if (tool.requiredAuth?.required) {
+        const hasAuth = userContext.credentials[tool.requiredAuth.configKey]
+        if (!hasAuth) return false
+      }
+      
+      // Check if user enabled this tool
+      if (tool.securityTier === SecurityTier.ExternalAPI) {
+        return userContext.enabledTools.includes(tool.name)
+      }
+      
+      return true
+    })
+  }
+  
+  /**
+   * Search tools by capability
+   */
+  searchByCapability(query: string): IToolInterface[] {
+    const results: IToolInterface[] = []
+    
+    for (const tool of this.tools.values()) {
+      // Search in description
+      if (tool.description.toLowerCase().includes(query.toLowerCase())) {
+        results.push(tool)
+        continue
+      }
+      
+      // Search in capabilities
+      for (const capability of tool.capabilities) {
+        if (capability.description.toLowerCase().includes(query.toLowerCase())) {
+          results.push(tool)
+          break
+        }
+      }
+    }
+    
+    return results
+  }
+  
+  /**
+   * Validate tool implementation
+   */
+  private validateTool(tool: IToolInterface): void {
+    // Check required fields
+    if (!tool.name || !tool.version || !tool.category) {
+      throw new Error(`Invalid tool: missing required fields`)
+    }
+    
+    // Check execute method exists
+    if (typeof tool.execute !== 'function') {
+      throw new Error(`Tool ${tool.name}: execute method required`)
+    }
+    
+    // Check validate method exists
+    if (typeof tool.validate !== 'function') {
+      throw new Error(`Tool ${tool.name}: validate method required`)
+    }
+    
+    // Check parameters schema
+    if (!tool.parameters || typeof tool.parameters.parse !== 'function') {
+      throw new Error(`Tool ${tool.name}: valid Zod schema required for parameters`)
+    }
+    
+    // Check capabilities
+    if (!tool.capabilities || tool.capabilities.length === 0) {
+      throw new Error(`Tool ${tool.name}: at least one capability required`)
+    }
+  }
+}
+```
+
+---
+
+### Tool Auto-Discovery (Plugin System)
+```typescript
+/**
+ * Tool Loader
+ * Automatically discovers and loads tools from directories
+ */
+class ToolLoader {
+  private registry: ToolRegistry
+  
+  constructor(registry: ToolRegistry) {
+    this.registry = registry
+  }
+  
+  /**
+   * Load all tools from directory
+   */
+  async loadFromDirectory(directory: string): Promise<void> {
+    const files = await fs.readdir(directory)
+    
+    for (const file of files) {
+      if (!file.endsWith('.tool.ts') && !file.endsWith('.tool.js')) {
+        continue
+      }
+      
+      try {
+        const toolPath = path.join(directory, file)
+        const toolModule = await import(toolPath)
+        
+        // Tool module should export 'tool' or default export
+        const tool = toolModule.tool || toolModule.default
+        
+        if (!tool) {
+          console.warn(`Tool file ${file}: no tool exported`)
+          continue
+        }
+        
+        // Register tool
+        this.registry.register(tool)
+        console.log(`✓ Loaded tool: ${tool.name}`)
+        
+      } catch (error) {
+        console.error(`Failed to load tool ${file}:`, error)
+      }
+    }
+  }
+  
+  /**
+   * Load core tools (built-in)
+   */
+  async loadCoreTools(): Promise<void> {
+    await this.loadFromDirectory('./tools/core')
+  }
+  
+  /**
+   * Load integration tools (optional)
+   */
+  async loadIntegrationTools(): Promise<void> {
+    await this.loadFromDirectory('./tools/integrations')
+  }
+  
+  /**
+   * Load user custom tools
+   */
+  async loadUserTools(userDirectory: string): Promise<void> {
+    await this.loadFromDirectory(userDirectory)
+  }
+}
+```
+
+---
+
+## ⚠️ ERROR HANDLING PATTERNS
+
+### Standardized Error Handling
+
+**Error Categories:**
+```typescript
+/**
+ * Tool Error Codes (Standardized)
+ */
+enum ToolErrorCode {
+  // Validation Errors (4xx)
+  VALIDATION_ERROR = 'VALIDATION_ERROR',
+  INVALID_PARAMETERS = 'INVALID_PARAMETERS',
+  MISSING_REQUIRED_PARAM = 'MISSING_REQUIRED_PARAM',
+  
+  // Authentication Errors (4xx)
+  AUTHENTICATION_REQUIRED = 'AUTHENTICATION_REQUIRED',
+  INVALID_CREDENTIALS = 'INVALID_CREDENTIALS',
+  AUTHENTICATION_EXPIRED = 'AUTHENTICATION_EXPIRED',
+  
+  // Authorization Errors (4xx)
+  PERMISSION_DENIED = 'PERMISSION_DENIED',
+  INSUFFICIENT_PRIVILEGES = 'INSUFFICIENT_PRIVILEGES',
+  SECURITY_VIOLATION = 'SECURITY_VIOLATION',
+  
+  // User Action Errors (4xx)
+  USER_CANCELLED = 'USER_CANCELLED',
+  USER_REJECTED = 'USER_REJECTED',
+  CONFIRMATION_TIMEOUT = 'CONFIRMATION_TIMEOUT',
+  
+  // Resource Errors (4xx)
+  RESOURCE_NOT_FOUND = 'RESOURCE_NOT_FOUND',
+  RESOURCE_LOCKED = 'RESOURCE_LOCKED',
+  RESOURCE_CONFLICT = 'RESOURCE_CONFLICT',
+  
+  // Rate Limiting (4xx)
+  RATE_LIMIT_EXCEEDED = 'RATE_LIMIT_EXCEEDED',
+  QUOTA_EXCEEDED = 'QUOTA_EXCEEDED',
+  COST_LIMIT_EXCEEDED = 'COST_LIMIT_EXCEEDED',
+  
+  // External Service Errors (5xx)
+  EXTERNAL_SERVICE_ERROR = 'EXTERNAL_SERVICE_ERROR',
+  API_ERROR = 'API_ERROR',
+  NETWORK_ERROR = 'NETWORK_ERROR',
+  TIMEOUT = 'TIMEOUT',
+  
+  // Tool Errors (5xx)
+  TOOL_INITIALIZATION_FAILED = 'TOOL_INITIALIZATION_FAILED',
+  TOOL_EXECUTION_FAILED = 'TOOL_EXECUTION_FAILED',
+  UNEXPECTED_ERROR = 'UNEXPECTED_ERROR'
+}
+
+/**
+ * Error Handler Base Class
+ */
+abstract class BaseToolErrorHandler {
+  /**
+   * Transform error into standardized ToolError
+   */
+  handleError(error: Error): ToolError {
+    // Identify error type
+    if (error instanceof ValidationError) {
+      return this.handleValidationError(error)
+    }
+    
+    if (error instanceof AuthenticationError) {
+      return this.handleAuthError(error)
+    }
+    
+    if (error instanceof NetworkError) {
+      return this.handleNetworkError(error)
+    }
+    
+    if (error instanceof TimeoutError) {
+      return this.handleTimeoutError(error)
+    }
+    
+    // Unknown error
+    return this.handleUnknownError(error)
+  }
+  
+  private handleValidationError(error: ValidationError): ToolError {
+    return {
+      code: ToolErrorCode.VALIDATION_ERROR,
+      message: error.message,
+      recoverable: true,
+      suggestion: 'Please check your input parameters and try again.'
+    }
+  }
+  
+  private handleAuthError(error: AuthenticationError): ToolError {
+    return {
+      code: ToolErrorCode.AUTHENTICATION_REQUIRED,
+      message: 'Authentication failed',
+      recoverable: true,
+      suggestion: 'Please check your API credentials and try again.'
+    }
+  }
+  
+  private handleNetworkError(error: NetworkError): ToolError {
+    return {
+      code: ToolErrorCode.NETWORK_ERROR,
+      message: 'Network connection failed',
+      recoverable: true,
+      suggestion: 'Please check your internet connection and try again.'
+    }
+  }
+  
+  private handleTimeoutError(error: TimeoutError): ToolError {
+    return {
+      code: ToolErrorCode.TIMEOUT,
+      message: 'Operation timed out',
+      recoverable: true,
+      suggestion: 'The operation took too long. Please try again.'
+    }
+  }
+  
+  private handleUnknownError(error: Error): ToolError {
+    return {
+      code: ToolErrorCode.UNEXPECTED_ERROR,
+      message: 'An unexpected error occurred',
+      recoverable: false,
+      suggestion: 'Please report this issue to support.',
+      originalError: error
+    }
+  }
+}
+```
+
+---
+
+### Error Recovery Strategies
+```typescript
+/**
+ * Error Recovery Handler
+ * Attempts to recover from tool errors
+ */
+class ErrorRecoveryHandler {
+  /**
+   * Attempt to recover from error
+   */
+  async tryRecover(
+    tool: IToolInterface,
+    params: unknown,
+    error: ToolError
+  ): Promise<ToolResult | null> {
+    
+    switch (error.code) {
+      case ToolErrorCode.AUTHENTICATION_EXPIRED:
+        return await this.refreshAuthentication(tool, params)
+      
+      case ToolErrorCode.RATE_LIMIT_EXCEEDED:
+        return await this.waitAndRetry(tool, params, error)
+      
+      case ToolErrorCode.NETWORK_ERROR:
+        return await this.retryWithBackoff(tool, params)
+      
+      case ToolErrorCode.TIMEOUT:
+        return await this.retryWithLongerTimeout(tool, params)
+      
+      case ToolErrorCode.RESOURCE_LOCKED:
+        return await this.waitForResourceUnlock(tool, params)
+      
+      default:
+        return null  // Cannot recover
+    }
+  }
+  
+  private async refreshAuthentication(
+    tool: IToolInterface,
+    params: unknown
+  ): Promise<ToolResult | null> {
+    // Attempt to refresh OAuth token or re-authenticate
+    try {
+      await tool.initialize()  // Re-initialize (re-auth)
+      return await tool.execute(params)
+    } catch {
+      return null  // Recovery failed
+    }
+  }
+  
+  private async waitAndRetry(
+    tool: IToolInterface,
+    params: unknown,
+    error: ToolError
+  ): Promise<ToolResult | null> {
+    // Extract wait time from error (if provided)
+    const waitMs = this.extractWaitTime(error) || 60000  // Default 1 minute
+    
+    await this.sleep(waitMs)
+    
+    try {
+      return await tool.execute(params)
+    } catch {
+      return null
+    }
+  }
+  
+  private async retryWithBackoff(
+    tool: IToolInterface,
+    params: unknown
+  ): Promise<ToolResult | null> {
+    const attempts = 3
+    const backoff = 1000  // 1 second
+    
+    for (let i = 0; i < attempts; i++) {
+      await this.sleep(backoff * Math.pow(2, i))
+      
+      try {
+        return await tool.execute(params)
+      } catch {
+        if (i === attempts - 1) return null
+      }
+    }
+    
+    return null
+  }
+  
+  private extractWaitTime(error: ToolError): number | null {
+    // Try to parse "Retry after X seconds" from error message
+    const match = error.message.match(/retry after (\d+) seconds/i)
+    if (match) {
+      return parseInt(match[1]) * 1000
+    }
+    return null
+  }
+  
+  private sleep(ms: number): Promise<void> {
+    return new Promise(resolve => setTimeout(resolve, ms))
+  }
+}
+```
+
+---
+
+## 📊 COMPLETE TOOL IMPLEMENTATION EXAMPLE
+
+### Example: Vercel Deploy Tool (Full Implementation)
+```typescript
+import { z } from 'zod'
+
+/**
+ * Vercel Deploy Tool
+ * Deploys Next.js applications to Vercel
+ */
+export const vercelDeployTool: IToolInterface = {
+  // IDENTITY
+  name: 'vercel_deploy',
+  version: '1.0.0',
+  category: ToolCategory.Deployment,
+  securityTier: SecurityTier.ExternalAPI,
+  
+  // METADATA
+  description: 'Deploy Next.js application to Vercel hosting platform',
+  documentation: 'https://vercel.com/docs/rest-api#endpoints/deployments',
+  
+  requiredAuth: {
+    type: 'bearer_token',
+    required: true,
+    configKey: 'VERCEL_TOKEN',
+    setupUrl: 'https://vercel.com/account/tokens',
+    testMethod: async () => {
+      try {
+        const response = await fetch('https://api.vercel.com/v2/user', {
+          headers: {
+            Authorization: `Bearer ${process.env.VERCEL_TOKEN}`
+          }
+        })
+        return response.ok
+      } catch {
+        return false
+      }
+    }
+  },
+  
+  costInfo: {
+    model: 'subscription',
+    billingUrl: 'https://vercel.com/account/billing'
+  },
+  
+  // CAPABILITY
+  capabilities: [
+    {
+      action: 'deploy',
+      description: 'Deploy application to Vercel (production or preview)',
+      requiresConfirmation: true,
+      estimatedTime: 45000  // ~45 seconds
+    }
+  ],
+  
+  parameters: z.object({
+    projectPath: z.string().describe('Path to Next.js project'),
+    production: z.boolean().default(false).describe('Deploy to production?'),
+    envVars: z.record(z.string()).optional().describe('Environment variables'),
+    buildCommand: z.string().optional().describe('Custom build command'),
+    framework: z.enum(['nextjs', 'react', 'vue', 'svelte']).default('nextjs')
+  }),
+  
+  returnType: z.object({
+    success: z.boolean(),
+    deploymentId: z.string(),
+    url: z.string().url(),
+    status: z.enum(['ready', 'building', 'error', 'queued']),
+    buildLogs: z.string().optional(),
+    inspectorUrl: z.string().url().optional()
+  }),
+  
+  // EXECUTION
+  async execute(params: unknown): Promise<ToolResult> {
+    const validated = this.parameters.parse(params)
+    
+    try {
+      // Step 1: Validate project exists
+      const projectExists = await this.validateProject(validated.projectPath)
+      if (!projectExists) {
+        return {
+          success: false,
+          error: {
+            code: ToolErrorCode.RESOURCE_NOT_FOUND,
+            message: `Project not found at ${validated.projectPath}`,
+            recoverable: false,
+            suggestion: 'Check the project path and try again.'
+          }
+        }
+      }
+      
+      // Step 2: Create deployment
+      const deploymentResponse = await fetch('https://api.vercel.com/v13/deployments', {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${process.env.VERCEL_TOKEN}`,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          name: path.basename(validated.projectPath),
+          files: await this.getProjectFiles(validated.projectPath),
+          target: validated.production ? 'production' : 'preview',
+          env: validated.envVars || {},
+          buildCommand: validated.buildCommand,
+          framework: validated.framework
+        })
+      })
+      
+      if (!deploymentResponse.ok) {
+        const error = await deploymentResponse.json()
+        throw new Error(`Vercel API error: ${error.error.message}`)
+      }
+      
+      const deployment = await deploymentResponse.json()
+      
+      // Step 3: Wait for build to complete
+      const finalStatus = await this.waitForDeployment(deployment.id)
+      
+      // Step 4: Get build logs
+      const buildLogs = await this.getBuildLogs(deployment.id)
+      
+      return {
+        success: finalStatus.readyState === 'READY',
+        data: {
+          success: finalStatus.readyState === 'READY',
+          deploymentId: deployment.id,
+          url: `https://${deployment.url}`,
+          status: finalStatus.readyState === 'READY' ? 'ready' : 'error',
+          buildLogs: buildLogs,
+          inspectorUrl: `https://vercel.com/${deployment.creator.username}/${deployment.name}`
+        },
+        metadata: {
+          duration: Date.now() - startTime,
+          resourcesUsed: ['Vercel API']
+        }
+      }
+      
+    } catch (error) {
+      return {
+        success: false,
+        error: this.handleError(error as Error)
+      }
+    }
+  },
+  
+  validate(params: unknown): ValidationResult {
+    try {
+      this.parameters.parse(params)
+      return { valid: true, errors: [] }
+    } catch (error) {
+      if (error instanceof z.ZodError) {
+        return {
+          valid: false,
+          errors: error.errors.map(e => e.message)
+        }
+      }
+      return {
+        valid: false,
+        errors: ['Invalid parameters']
+      }
+    }
+  },
+  
+  // ERROR HANDLING
+  handleError(error: Error): ToolError {
+    if (error.message.includes('authentication')) {
+      return {
+        code: ToolErrorCode.AUTHENTICATION_REQUIRED,
+        message: 'Vercel authentication failed',
+        recoverable: true,
+        suggestion: 'Check your VERCEL_TOKEN environment variable.'
+      }
+    }
+    
+    if (error.message.includes('rate limit')) {
+      return {
+        code: ToolErrorCode.RATE_LIMIT_EXCEEDED,
+        message: 'Vercel API rate limit exceeded',
+        recoverable: true,
+        suggestion: 'Wait a few minutes and try again.'
+      }
+    }
+    
+    if (error.message.includes('timeout')) {
+      return {
+        code: ToolErrorCode.TIMEOUT,
+        message: 'Deployment timed out',
+        recoverable: true,
+        suggestion: 'Try again or check Vercel dashboard for deployment status.'
+      }
+    }
+    
+    return {
+      code: ToolErrorCode.TOOL_EXECUTION_FAILED,
+      message: error.message,
+      recoverable: false,
+      originalError: error
+    }
+  },
+  
+  retry: {
+    maxAttempts: 2,
+    backoffMs: 5000,
+    backoffMultiplier: 2,
+    retryableErrors: [
+      ToolErrorCode.NETWORK_ERROR,
+      ToolErrorCode.TIMEOUT,
+      ToolErrorCode.RATE_LIMIT_EXCEEDED
+    ]
+  },
+  
+  // LIFECYCLE
+  async initialize(): Promise<void> {
+    // Test Vercel authentication
+    const valid = await this.requiredAuth!.testMethod!()
+    if (!valid) {
+      throw new Error('Vercel authentication failed')
+    }
+  },
+  
+  async healthCheck(): Promise<HealthStatus> {
+    try {
+      const response = await fetch('https://api.vercel.com/v2/user', {
+        headers: {
+          Authorization: `Bearer ${process.env.VERCEL_TOKEN}`
+        }
+      })
+      
+      return {
+        healthy: response.ok,
+        message: response.ok ? 'Vercel API accessible' : 'Vercel API error',
+        lastCheck: new Date()
+      }
+    } catch {
+      return {
+        healthy: false,
+        message: 'Cannot reach Vercel API',
+        lastCheck: new Date()
+      }
+    }
+  },
+  
+  // HELPER METHODS
+  async validateProject(projectPath: string): Promise<boolean> {
+    try {
+      const packageJson = await fs.readFile(
+        path.join(projectPath, 'package.json'),
+        'utf-8'
+      )
+      const pkg = JSON.parse(packageJson)
+      return !!pkg.dependencies?.next
+    } catch {
+      return false
+    }
+  },
+  
+  async getProjectFiles(projectPath: string): Promise<any[]> {
+    // Implementation to gather all project files for deployment
+    // This would recursively read files and create file objects
+    // Simplified for example
+    return []
+  },
+  
+  async waitForDeployment(deploymentId: string): Promise<any> {
+    const maxWait = 300000  // 5 minutes
+    const startTime = Date.now()
+    
+    while (Date.now() - startTime < maxWait) {
+      const response = await fetch(
+        `https://api.vercel.com/v13/deployments/${deploymentId}`,
+        {
+          headers: {
+            Authorization: `Bearer ${process.env.VERCEL_TOKEN}`
+          }
+        }
+      )
+      
+      const deployment = await response.json()
+      
+      if (deployment.readyState === 'READY' || deployment.readyState === 'ERROR') {
+        return deployment
+      }
+      
+      await new Promise(resolve => setTimeout(resolve, 5000))  // Wait 5s
+    }
+    
+    throw new Error('Deployment timeout')
+  },
+  
+  async getBuildLogs(deploymentId: string): Promise<string> {
+    const response = await fetch(
+      `https://api.vercel.com/v2/deployments/${deploymentId}/events`,
+      {
+        headers: {
+          Authorization: `Bearer ${process.env.VERCEL_TOKEN}`
+        }
+      }
+    )
+    
+    const events = await response.json()
+    return events.map((e: any) => e.text).join('\n')
+  }
+}
+```
+
+---
+
+## 🧪 TOOL TESTING GUIDELINES
+
+### Testing Framework for Tools
+```typescript
+/**
+ * Tool Test Suite
+ * Standard test patterns for all tools
+ */
+describe('Tool: vercel_deploy', () => {
+  let tool: IToolInterface
+  let mockUserContext: UserContext
+  
+  beforeEach(() => {
+    tool = vercelDeployTool
+    mockUserContext = {
+      userId: 'test-user',
+      credentials: {
+        VERCEL_TOKEN: 'test-token'
+      },
+      enabledTools: ['vercel_deploy'],
+      settings: {
+        dailyCostLimit: 10.00
+      }
+    }
+  })
+  
+  describe('Interface Compliance', () => {
+    test('implements all required fields', () => {
+      expect(tool.name).toBeDefined()
+      expect(tool.version).toBeDefined()
+      expect(tool.category).toBeDefined()
+      expect(tool.securityTier).toBeDefined()
+      expect(tool.description).toBeDefined()
+      expect(tool.capabilities).toBeDefined()
+      expect(tool.parameters).toBeDefined()
+      expect(tool.returnType).toBeDefined()
+    })
+    
+    test('has execute method', () => {
+      expect(typeof tool.execute).toBe('function')
+    })
+    
+    test('has validate method', () => {
+      expect(typeof tool.validate).toBe('function')
+    })
+    
+    test('has handleError method', () => {
+      expect(typeof tool.handleError).toBe('function')
+    })
+  })
+  
+  describe('Parameter Validation', () => {
+    test('validates correct parameters', () => {
+      const result = tool.validate({
+        projectPath: '/path/to/project',
+        production: true
+      })
+      
+      expect(result.valid).toBe(true)
+    })
+    
+    test('rejects invalid parameters', () => {
+      const result = tool.validate({
+        projectPath: 123,  // Should be string
+        production: 'yes'  // Should be boolean
+      })
+      
+      expect(result.valid).toBe(false)
+      expect(result.errors.length).toBeGreaterThan(0)
+    })
+    
+    test('rejects missing required parameters', () => {
+      const result = tool.validate({})
+      
+      expect(result.valid).toBe(false)
+      expect(result.errors).toContain('projectPath is required')
+    })
+  })
+  
+  describe('Execution', () => {
+    test('succeeds with valid parameters', async () => {
+      const result = await tool.execute({
+        projectPath: './test-project',
+        production: false
+      })
+      
+      expect(result.success).toBe(true)
+      expect(result.data).toBeDefined()
+      expect(result.data.deploymentId).toBeDefined()
+      expect(result.data.url).toMatch(/^https:\/\//)
+    })
+    
+    test('fails gracefully with invalid project', async () => {
+      const result = await tool.execute({
+        projectPath: './non-existent',
+        production: false
+      })
+      
+      expect(result.success).toBe(false)
+      expect(result.error).toBeDefined()
+      expect(result.error.code).toBe(ToolErrorCode.RESOURCE_NOT_FOUND)
+    })
+    
+    test('handles authentication errors', async () => {
+      delete process.env.VERCEL_TOKEN
+      
+      const result = await tool.execute({
+        projectPath: './test-project'
+      })
+      
+      expect(result.success).toBe(false)
+      expect(result.error.code).toBe(ToolErrorCode.AUTHENTICATION_REQUIRED)
+    })
+  })
+  
+  describe('Error Handling', () => {
+    test('transforms errors correctly', () => {
+      const error = new Error('authentication failed')
+      const toolError = tool.handleError(error)
+      
+      expect(toolError.code).toBe(ToolErrorCode.AUTHENTICATION_REQUIRED)
+      expect(toolError.recoverable).toBe(true)
+      expect(toolError.suggestion).toBeDefined()
+    })
+    
+    test('marks non-recoverable errors', () => {
+      const error = new Error('project not found')
+      const toolError = tool.handleError(error)
+      
+      expect(toolError.recoverable).toBe(false)
+    })
+  })
+  
+  describe('Retry Logic', () => {
+    test('has retry configuration', () => {
+      expect(tool.retry).toBeDefined()
+      expect(tool.retry.maxAttempts).toBeGreaterThan(0)
+      expect(tool.retry.retryableErrors).toBeDefined()
+    })
+    
+    test('retries on network error', async () => {
+      // Mock network error
+      jest.spyOn(global, 'fetch').mockRejectedValueOnce(new Error('network'))
+      jest.spyOn(global, 'fetch').mockResolvedValueOnce({ ok: true } as Response)
+      
+      const result = await tool.execute({
+        projectPath: './test-project'
+      })
+      
+      expect(result.success).toBe(true)
+      expect(result.metadata.retriedAttempts).toBe(1)
+    })
+  })
+  
+  describe('Security', () => {
+    test('requires authentication', () => {
+      expect(tool.requiredAuth).toBeDefined()
+      expect(tool.requiredAuth.required).toBe(true)
+    })
+    
+    test('is external API tier', () => {
+      expect(tool.securityTier).toBe(SecurityTier.ExternalAPI)
+    })
+    
+    test('requires user confirmation', () => {
+      expect(tool.capabilities[0].requiresConfirmation).toBe(true)
+    })
+  })
+  
+  describe('Health Check', () => {
+    test('reports healthy status', async () => {
+      const status = await tool.healthCheck!()
+      
+      expect(status.healthy).toBe(true)
+      expect(status.lastCheck).toBeInstanceOf(Date)
+    })
+    
+    test('reports unhealthy when API down', async () => {
+      jest.spyOn(global, 'fetch').mockRejectedValue(new Error('network'))
+      
+      const status = await tool.healthCheck!()
+      
+      expect(status.healthy).toBe(false)
+      expect(status.message).toContain('Cannot reach')
+    })
+  })
+})
+```
+
+---
+
+## 📋 TOOL DEVELOPMENT CHECKLIST
+```markdown
+TOOL IMPLEMENTATION CHECKLIST:
+
+INTERFACE COMPLIANCE:
+□ Implements IToolInterface completely
+□ All required fields present (name, version, category, etc.)
+□ execute() method implemented
+□ validate() method implemented
+□ handleError() method implemented
+
+DOCUMENTATION:
+□ Description clear and concise
+□ Parameters documented with Zod schema
+□ Return type documented with Zod schema
+□ Capabilities list complete
+□ Documentation URL provided
+
+SECURITY:
+□ Security tier assigned correctly
+□ Authentication configured (if required)
+□ User confirmation required (if external API or execute tier)
+□ Input validation implemented
+□ Sensitive data not logged
+
+ERROR HANDLING:
+□ All errors transformed to ToolError
+□ Error codes use standardized enum
+□ Recoverable flag set correctly
+□ Suggestions provided for common errors
+□ Original error preserved (for debugging)
+
+RETRY LOGIC (if applicable):
+□ Retry configuration defined
+□ Retryable errors identified
+□ Backoff strategy implemented
+□ Max attempts reasonable
+
+TESTING:
+□ Unit tests written (interface compliance)
+□ Integration tests written (actual execution)
+□ Error case tests written
+□ Security tests written
+□ Mock tests for external APIs
+
+LIFECYCLE:
+□ initialize() implemented (if needed)
+□ cleanup() implemented (if needed)
+□ healthCheck() implemented
+
+PERFORMANCE:
+□ Estimated time documented
+□ Timeouts configured
+□ No blocking operations
+□ Async operations use async/await
+
+GRADING:
+All checks pass: ⭐⭐⭐⭐⭐ Production ready
+1-2 missing: ⭐⭐⭐⭐ Acceptable (address before merge)
+3-5 missing: ⭐⭐⭐ Needs work
+>5 missing: ⭐⭐ Not ready
+```
+
+---
+
+## 📚 RELATED ARTICLES
+
+| Article | Purpose | Relationship to Tool Architecture |
+|---------|---------|-----------------------------------|
+| **Article II: MCP Integration** | MCP protocol details | MCP servers use this architecture |
+| **Article III: Core Tool Catalog** | Built-in tools | All implement this interface |
+| **Article IV: Integration Tool Catalog** | Optional tools | All implement this interface |
+| **Segment 4: Execution Layer** | Tool orchestration | Uses tools defined here |
+
+---
+
+**Previous:** [← Segment 3 README](./README.md)  
+**Next:** [Article II: MCP Integration →](./02-article-ii-mcp-integration.md)
+
+---
+
+**Last Updated:** February 7, 2026  
+**Constitutional Version:** 2.0.0  
+**Status:** ✅ Ratified and In Force
+
+**Motto:** *"A Standardized Interface Ensures Predictability, Security, and Excellence"*
