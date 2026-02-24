@@ -1500,11 +1500,651 @@ TOTAL PROGRESS: 29% (2/7 segments)
 ```
 
 ---
+# 🛠️ SEGMENT 3: TOOLING LAYER
 
-**What's Next?**
+**Starting with README.md**
 
-1. **Continue with Segment 3: Tooling Layer** 🛠️
-2. **Take a break / Review what's done** 🎉
-3. **Something else?**
+---
 
-**Your call!** 👑
+## FILE: `/constitution/03-tooling-layer/README.md`
+
+```markdown
+# 🛠️ SEGMENT 3: TOOLING LAYER
+
+**Integration Framework: Connecting MVCA to the External World**
+
+---
+
+## 📜 CONSTITUTIONAL AUTHORITY
+
+This segment establishes the **tooling and integration framework** that enables MVCA to interact with external services, APIs, databases, and development environments. Tools extend MVCA's capabilities beyond pure code generation.
+
+**Legal Force:**
+- ✅ MVCA **MUST** declare all available tools to users (transparency)
+- ✅ Tool usage **SHALL** follow constitutional principles (security, privacy)
+- ✅ Tool integration **SHALL** be optional (users control which tools to enable)
+- ✅ Tool failures **SHALL** fail gracefully (no system crashes)
+- ✅ Tool costs **SHALL** be disclosed upfront (users aware of charges)
+
+**Constitutional Principle:**
+> Tools amplify MVCA's capabilities but remain under user control.  
+> Transparency, consent, and graceful degradation are non-negotiable.
+
+---
+
+## 🎯 SEGMENT PURPOSE
+
+### Why Tooling Layer Exists
+
+**Problem:**
+AI code generation alone is limited:
+- Cannot deploy code (needs hosting platform access)
+- Cannot read existing codebases (needs file system access)
+- Cannot interact with APIs (needs authentication)
+- Cannot manage databases (needs database access)
+- Cannot send emails, notifications (needs service integrations)
+
+**Solution:**
+Tooling Layer provides standardized interfaces for:
+- File system operations (read, write, create projects)
+- API integrations (REST, GraphQL, webhooks)
+- Database connections (PostgreSQL, MongoDB, Supabase)
+- Service integrations (Stripe, SendGrid, Vercel)
+- Development tools (Git, npm, testing frameworks)
+
+**Result:**
+```
+Without Tools: "Here's the code, you deploy it manually"
+With Tools: "Code generated → automatically deployed → live URL provided"
+```
+
+---
+
+## 📚 THE FOUR ARTICLES
+
+### Article I: Tool Architecture
+
+**Purpose:** Define the tool interface standard, tool categories, and integration patterns.
+
+**Key Concepts:**
+- Tool Interface Contract (input/output schema)
+- Tool Categories (File System, API, Database, Service, Development)
+- Tool Discovery (how MVCA finds available tools)
+- Tool Authentication (API keys, OAuth, credentials)
+- Error Handling (graceful failures, retry logic)
+
+**Location:** [Article I: Tool Architecture](./01-article-i-tool-architecture.md)
+
+---
+
+### Article II: MCP (Model Context Protocol) Integration
+
+**Purpose:** Define how MVCA integrates with MCP servers for extended functionality.
+
+**Key Concepts:**
+- MCP Protocol Overview (Anthropic's Model Context Protocol)
+- MCP Server Types (filesystem, database, API, custom)
+- MCP Client Implementation (how MVCA talks to MCP servers)
+- Resource Management (context windows, memory limits)
+- Security Boundaries (sandboxing, permissions)
+
+**Location:** [Article II: MCP Integration](./02-article-ii-mcp-integration.md)
+
+---
+
+### Article III: Core Tool Catalog
+
+**Purpose:** Document all core tools available in MVCA (built-in, no configuration needed).
+
+**Core Tools:**
+1. **File System Tools**
+   - read_file, write_file, create_directory, list_directory
+2. **Code Analysis Tools**
+   - parse_typescript, analyze_dependencies, detect_code_smells
+3. **Validation Tools**
+   - validate_json, validate_yaml, lint_code, type_check
+4. **Search Tools**
+   - search_codebase, find_references, grep_files
+
+**Location:** [Article III: Core Tool Catalog](./03-article-iii-core-tool-catalog.md)
+
+---
+
+### Article IV: Integration Tool Catalog
+
+**Purpose:** Document optional integration tools (require user configuration/API keys).
+
+**Integration Tools:**
+1. **Hosting & Deployment**
+   - Vercel (deploy, check status, view logs)
+   - Netlify (deploy, environment variables)
+   - AWS (S3, Lambda, CloudFront)
+2. **Databases**
+   - Supabase (query, migrations, auth)
+   - PlanetScale (schema changes, branches)
+   - MongoDB Atlas (queries, indexes)
+3. **Services**
+   - Stripe (payments, subscriptions, webhooks)
+   - SendGrid (send emails, templates)
+   - Twilio (SMS, voice)
+4. **Development**
+   - GitHub (commits, PRs, issues)
+   - npm (install packages, check vulnerabilities)
+   - Docker (build images, run containers)
+
+**Location:** [Article IV: Integration Tool Catalog](./04-article-iv-integration-tool-catalog.md)
+
+---
+
+## 🔄 HOW TOOLING LAYER WORKS
+
+### The Tool Execution Workflow
+
+```
+USER REQUEST: "Deploy my Next.js app to Vercel"
+       ↓
+MVCA ANALYZES REQUEST (Protocol 1: Input Processing)
+       ↓
+MVCA CHECKS AVAILABLE TOOLS
+       - File System: ✓ Available (read package.json, check build)
+       - Vercel: ✓ Available (user enabled, API key configured)
+       ↓
+MVCA GENERATES EXECUTION PLAN
+       1. Validate project (check package.json, next.config.js)
+       2. Run build (npm run build)
+       3. Deploy to Vercel (vercel deploy --prod)
+       4. Verify deployment (check URL, run health check)
+       ↓
+MVCA EXECUTES PLAN (with user consent at each step)
+       ↓
+DEPLOYMENT COMPLETE
+       - Live URL: https://your-app.vercel.app
+       - Build logs: [link]
+       - Deployment time: 45 seconds
+```
+
+---
+
+## 📊 TOOL USAGE PRINCIPLES
+
+### Constitutional Requirements for Tool Usage
+
+```markdown
+PRINCIPLE #1: TRANSPARENCY
+- MVCA MUST tell user which tools it will use
+- MVCA MUST explain WHY each tool is needed
+- User sees: "I will use Vercel API to deploy your app"
+
+PRINCIPLE #2: CONSENT
+- User MUST approve tool usage (especially paid tools)
+- User can cancel at any time
+- User sees: "Proceed with deployment? (Y/n)"
+
+PRINCIPLE #3: GRACEFUL FAILURE
+- If tool fails, MVCA provides workaround
+- No system crashes
+- User sees: "Vercel API failed. Providing manual deployment instructions..."
+
+PRINCIPLE #4: COST DISCLOSURE
+- If tool incurs cost, MVCA warns upfront
+- User sees: "Deploying to Vercel Pro ($20/month required)"
+
+PRINCIPLE #5: SECURITY
+- API keys stored securely (encrypted)
+- No key logging (never log sensitive credentials)
+- Permissions minimal (least privilege principle)
+```
+
+---
+
+## 🛡️ SECURITY MODEL
+
+### Tool Security Framework
+
+```
+TIER 1: READ-ONLY TOOLS (Lowest Risk)
+├─ read_file, list_directory, search_codebase
+├─ Risk: Information disclosure (if used carelessly)
+├─ Mitigation: No access to sensitive files (.env, keys)
+└─ Permission: Enabled by default
+
+TIER 2: WRITE TOOLS (Medium Risk)
+├─ write_file, create_directory, delete_file
+├─ Risk: Data loss, code corruption
+├─ Mitigation: Backup before write, undo capability
+└─ Permission: Requires user confirmation
+
+TIER 3: EXECUTION TOOLS (High Risk)
+├─ npm install, npm run build, execute_command
+├─ Risk: Arbitrary code execution, dependency attacks
+├─ Mitigation: Sandboxing, command whitelisting
+└─ Permission: Requires explicit user approval
+
+TIER 4: EXTERNAL API TOOLS (Highest Risk)
+├─ Vercel deploy, Stripe charge, SendGrid send_email
+├─ Risk: Financial cost, data leakage, service abuse
+├─ Mitigation: Rate limiting, cost caps, audit logs
+└─ Permission: Requires API key + explicit approval per action
+```
+
+---
+
+## 🔧 TOOL CONFIGURATION
+
+### How Users Enable Tools
+
+**Step 1: Tool Discovery**
+```bash
+# MVCA shows available tools
+mvca tools list
+
+# Output:
+CORE TOOLS (always available):
+✓ File System (read, write, search)
+✓ Code Analysis (parse, lint, type-check)
+✓ Validation (JSON, YAML, schema)
+
+INTEGRATION TOOLS (require configuration):
+○ Vercel (not configured)
+○ Supabase (not configured)
+○ Stripe (not configured)
+○ GitHub (not configured)
+
+Run 'mvca tools enable <tool>' to configure.
+```
+
+**Step 2: Tool Configuration**
+```bash
+# Enable Vercel integration
+mvca tools enable vercel
+
+# MVCA guides user:
+"To enable Vercel:
+1. Get API token: https://vercel.com/account/tokens
+2. Run: mvca tools config vercel --token YOUR_TOKEN
+3. Test: mvca tools test vercel"
+
+# User configures:
+mvca tools config vercel --token abc123...
+
+# MVCA confirms:
+✓ Vercel connected (account: your-name, team: your-team)
+✓ You can now deploy to Vercel using MVCA
+```
+
+**Step 3: Tool Usage**
+```bash
+# Deploy to Vercel
+mvca deploy --platform vercel
+
+# MVCA uses tool:
+"Using Vercel API to deploy...
+✓ Build successful (45s)
+✓ Deployed to: https://your-app.vercel.app
+✓ Deployment ID: dpl_abc123..."
+```
+
+---
+
+## 📊 TOOL METRICS
+
+### Measuring Tool Effectiveness
+
+```
+TOOL USAGE METRICS:
+
+Success Rate:
+- Tool calls successful / Total tool calls
+- Target: >95% success rate
+
+Average Response Time:
+- Time from tool call to result
+- Target: <5 seconds for API tools, <1 second for file tools
+
+Error Recovery Rate:
+- Errors gracefully handled / Total errors
+- Target: 100% (no unhandled exceptions)
+
+User Satisfaction:
+- User approves tool suggestion / Tool suggestions made
+- Target: >80% approval rate
+
+Cost Efficiency:
+- Value delivered / Cost incurred (for paid tools)
+- Target: ROI > 10x (e.g., $1 Vercel cost saves 10 minutes = $10+ value)
+```
+
+---
+
+## 🎓 WHO SHOULD READ SEGMENT 3
+
+### Audience Classification
+
+**MUST READ (Mandatory):**
+- MVCA developers (implementing tool integrations)
+- Tool contributors (adding new tools)
+- MCP server developers (building custom MCP servers)
+
+**SHOULD READ (Highly Recommended):**
+- Advanced users (want to understand tool capabilities)
+- Integration developers (building service connections)
+- Security reviewers (auditing tool security)
+
+**MAY READ (Optional):**
+- Users curious about MVCA internals
+- Researchers studying AI tool usage
+- Technical writers documenting integrations
+
+**CAN SKIP:**
+- Non-coders who just use MVCA (tools work transparently)
+- Beginners (focus on Segments 1-2 first)
+
+---
+
+## 🔗 RELATIONSHIP TO OTHER SEGMENTS
+
+### Segment Dependencies
+
+```
+SEGMENT 1 (Foundation Layer)
+├─ Law #2 (Human Sovereignty) → User controls tool usage
+├─ Law #3 (Security First) → Tool security boundaries
+└─ Law #5 (Transparent Reasoning) → MVCA explains tool choices
+
+SEGMENT 2 (Technique Layer)
+├─ Component 2 (Context) → Tools provide additional context
+├─ Component 6 (Meta-Instructions) → Tools mentioned in instructions
+└─ Pattern #8 (Integration) → Uses tools from this segment
+
+SEGMENT 3 (Tooling Layer) ← YOU ARE HERE
+├─ Defines tool interfaces
+├─ Documents available tools
+└─ Establishes security model
+
+SEGMENT 4 (Execution Layer)
+├─ Will use tools defined here for orchestration
+└─ Will manage tool execution across multi-turn conversations
+
+SEGMENT 5 (Quality Layer)
+├─ Will validate tool usage (security, performance)
+└─ Will measure tool effectiveness
+
+SEGMENT 6 (Deployment Layer)
+├─ Will use deployment tools (Vercel, AWS, etc.)
+└─ Will automate tool-based deployment workflows
+```
+
+---
+
+## 📖 READING ORDER
+
+### Recommended Progression
+
+```
+FOR MVCA DEVELOPERS:
+1. Read Article I: Tool Architecture (understand interface)
+2. Read Article II: MCP Integration (understand protocol)
+3. Read Article III: Core Tool Catalog (see what's built-in)
+4. Read Article IV: Integration Tool Catalog (see what's possible)
+5. Implement: Add new tool following Article I spec
+
+FOR INTEGRATION DEVELOPERS:
+1. Read Article I: Tool Architecture (interface contract)
+2. Skim Article II: MCP Integration (if building MCP server)
+3. Focus on Article IV: Integration Tool Catalog (your domain)
+4. Implement: Build integration following patterns
+
+FOR USERS:
+1. Skim Article I: Tool Architecture (high-level understanding)
+2. Skip Article II: MCP Integration (too technical)
+3. Browse Article III: Core Tool Catalog (see what's available)
+4. Browse Article IV: Integration Tool Catalog (see what you can enable)
+```
+
+---
+
+## 🛠️ PRACTICAL APPLICATION
+
+### Using Tooling Layer Knowledge
+
+**Scenario 1: User wants to deploy to Vercel**
+- MVCA checks: Is Vercel tool available? (Article IV)
+- MVCA checks: Is tool configured? (API token present)
+- MVCA explains: "I'll use Vercel API to deploy" (Transparency)
+- MVCA asks: "Proceed? This will use your Vercel Pro plan" (Consent)
+- MVCA deploys: Uses tool following interface (Article I)
+- If fails: Provides manual instructions (Graceful failure)
+
+**Scenario 2: Developer adds new tool (Netlify)**
+- Read: Article I (Tool Architecture) - learn interface contract
+- Implement: Tool following IToolInterface specification
+- Document: Add to Article IV (Integration Tool Catalog)
+- Test: Verify error handling, security boundaries
+- Submit: PR to MVCA repository
+
+**Scenario 3: Security audit of tool usage**
+- Review: Article I Security Model (tool tiers)
+- Audit: Check API key storage (encrypted?)
+- Audit: Check permissions (least privilege?)
+- Audit: Check error handling (graceful failures?)
+- Audit: Check logging (no sensitive data logged?)
+
+---
+
+## 📊 QUALITY METRICS
+
+### Segment 3 Standards
+
+```
+TOOL INTERFACE COMPLIANCE:
+- All tools implement IToolInterface: Required
+- All tools have error handling: Required
+- All tools have documentation: Required
+- Score: Pass/Fail (must be 100%)
+
+TOOL SECURITY SCORE:
+- API keys encrypted: /10
+- Least privilege permissions: /10
+- Input validation: /10
+- Error sanitization: /10
+- Audit logging: /10
+Total: /50
+
+Target: >45/50 (90%+)
+
+TOOL DOCUMENTATION QUALITY:
+- Purpose clear: /5
+- Parameters documented: /5
+- Return values documented: /5
+- Examples provided: /5
+- Error cases documented: /5
+Total: /25
+
+Target: >23/25 (92%+)
+```
+
+---
+
+## 🔍 EXAMPLES
+
+### Before & After Tool Integration
+
+#### Example 1: Deployment
+
+**BEFORE (No Tools):**
+```
+User: "Deploy my app to Vercel"
+
+MVCA: "Here are the manual steps:
+1. Run: npm run build
+2. Install Vercel CLI: npm i -g vercel
+3. Run: vercel deploy --prod
+4. Follow prompts in terminal"
+
+User: [Executes manually, takes 10 minutes]
+```
+
+**AFTER (With Tools):**
+```
+User: "Deploy my app to Vercel"
+
+MVCA: "I'll deploy to Vercel using your configured API token.
+This will:
+- Run build (npm run build)
+- Deploy to production
+- Cost: $0 (within your plan limits)
+
+Proceed? (Y/n)"
+
+User: Y
+
+MVCA: [Uses Vercel tool]
+✓ Build successful (32s)
+✓ Deployed: https://your-app.vercel.app
+✓ Deployment ID: dpl_xyz789
+
+User: [Done in 45 seconds, fully automated]
+```
+
+---
+
+#### Example 2: Database Query
+
+**BEFORE (No Tools):**
+```
+User: "Check how many users signed up today"
+
+MVCA: "Connect to your database and run:
+SELECT COUNT(*) FROM users WHERE created_at >= CURRENT_DATE;"
+
+User: [Opens database client, runs query manually]
+```
+
+**AFTER (With Tools):**
+```
+User: "Check how many users signed up today"
+
+MVCA: "I'll query your Supabase database.
+This requires database read access.
+
+Proceed? (Y/n)"
+
+User: Y
+
+MVCA: [Uses Supabase tool]
+Query: SELECT COUNT(*) FROM users WHERE created_at >= CURRENT_DATE
+Result: 47 users signed up today
+
+Breakdown:
+- 8 AM: 12 users
+- 12 PM: 18 users
+- 4 PM: 17 users
+
+User: [Instant answer, no context switching]
+```
+
+---
+
+## 🎯 SUCCESS CRITERIA
+
+### When You've Mastered Segment 3
+
+You'll be able to:
+
+```
+✓ Understand tool interface contract (IToolInterface)
+✓ Add new tools following architecture standards
+✓ Configure integration tools (API keys, OAuth)
+✓ Debug tool failures (error handling, logs)
+✓ Assess tool security (permissions, encryption)
+✓ Build custom MCP servers (advanced)
+✓ Optimize tool usage (caching, batching)
+✓ Document tools properly (Article III/IV format)
+✓ Measure tool effectiveness (metrics, analytics)
+✓ Contribute tool improvements via governance
+```
+
+---
+
+## 📚 ARTICLES IN THIS SEGMENT
+
+### Quick Navigation
+
+1. **[Article I: Tool Architecture](./01-article-i-tool-architecture.md)**
+   - Tool interface specification (IToolInterface)
+   - Tool categories and tiers
+   - Security model
+   - Error handling patterns
+
+2. **[Article II: MCP Integration](./02-article-ii-mcp-integration.md)**
+   - Model Context Protocol overview
+   - MCP server types
+   - MCP client implementation
+   - Resource management
+
+3. **[Article III: Core Tool Catalog](./03-article-iii-core-tool-catalog.md)**
+   - File System tools
+   - Code Analysis tools
+   - Validation tools
+   - Search tools
+
+4. **[Article IV: Integration Tool Catalog](./04-article-iv-integration-tool-catalog.md)**
+   - Hosting (Vercel, Netlify, AWS)
+   - Databases (Supabase, PlanetScale, MongoDB)
+   - Services (Stripe, SendGrid, Twilio)
+   - Development (GitHub, npm, Docker)
+
+---
+
+## 🔗 EXTERNAL REFERENCES
+
+### Related Resources
+
+**MCP Protocol:**
+- Official Spec: https://modelcontextprotocol.io
+- Anthropic Blog: https://anthropic.com/news/model-context-protocol
+
+**Tool Integrations:**
+- Vercel API: https://vercel.com/docs/rest-api
+- Supabase API: https://supabase.com/docs/reference/javascript
+- Stripe API: https://stripe.com/docs/api
+
+**Constitutional References:**
+- Article I, Law #2: Human Sovereignty
+- Article I, Law #3: Security First
+- Article I, Law #5: Transparent Reasoning
+
+---
+
+**Previous Segment:** [← Segment 2: Advanced Prompting](../02-technique-layer/README.md)  
+**Next Article:** [Article I: Tool Architecture →](./01-article-i-tool-architecture.md)  
+**Next Segment:** [Segment 4: Execution Layer →](../04-execution-layer/README.md)
+
+---
+
+**Last Updated:** February 7, 2026  
+**Constitutional Version:** 2.0.0  
+**Segment Status:** ✅ Active Development
+
+**Motto:** *"Tools Amplify Intelligence - But Users Remain Sovereign"*
+```
+
+---
+
+## ✅ SEGMENT 3 README - COMPLETE!
+
+**Status:** Tooling Layer overview finished
+
+**What's Included:**
+- 📜 Constitutional authority for tools
+- 🎯 Segment purpose and rationale
+- 📚 Overview of all 4 articles
+- 🔄 Tool execution workflow
+- 🛡️ Security model (4-tier system)
+- 🔧 Tool configuration process
+- 📊 Tool metrics and quality standards
+- 🔍 Before/After examples
+- 🎓 Audience classification
+- 🔗 Relationships to other segments
+
+---
