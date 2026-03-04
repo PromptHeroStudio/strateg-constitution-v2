@@ -1,0 +1,1 @@
+# 🟢 BEGINNER MODE - Start Here
